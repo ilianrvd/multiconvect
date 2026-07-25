@@ -1,0 +1,35 @@
+paths:
+  output: "output/"
+  logs:   "logs/"
+  data:   "data/"
+
+domain:
+  lat_min: 40.0
+  lat_max: 44.5
+  lon_min: 22.0
+  lon_max: 28.5
+
+models:
+  gfs:
+    enabled: true
+    field: "REFC"
+    threshold: 20
+  icon:
+    enabled: true
+    field: "LPI_CON_MAX"
+    threshold: 10
+  ifs:
+    enabled: true
+    field: "mucape"
+    threshold: 500
+
+expand_pixels: 3
+
+viz:
+  dpi: 150
+  figsize: [14, 10]
+  alpha: 0.4
+  colors:
+    HIGH: "#FF8C00"
+    MED:  "#FFD700"
+    LOW:  "#00CC44"
