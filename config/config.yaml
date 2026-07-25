@@ -1,8 +1,8 @@
 paths:
-  output: "output/"
+  output: "docs/"
   logs:   "logs/"
   data:   "data/"
-
+  
 domain:
   lat_min: 40.0
   lat_max: 44.5

@@ -1,0 +1,50 @@
+name: Convective Forecast
+
+on:
+  schedule:
+    - cron: "0 5,11,17,23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: mc
+          create-args: >-
+            python=3.11
+            xarray
+            cfgrib
+            eccodes
+            scipy
+            numpy
+            matplotlib=3.9
+            cartopy
+            shapely
+            pyyaml
+            requests
+
+      - name: Install herbie
+        shell: bash -l {0}
+        run: pip install herbie-data
+
+      - name: Run forecast
+        shell: bash -l {0}
+        run: |
+          python run.py --run 0
+          python make_gallery.py
+
+      - name: Commit and push maps
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs/
+          git commit -m "Update forecast $(date -u +%Y-%m-%dT%H:%M)" || echo "No changes"
+          git push
