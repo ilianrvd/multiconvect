@@ -107,6 +107,11 @@ def main():
         run_date, run_hour = find_latest_run(cfg)
     else:
         run_date, run_hour = args.date, args.run or 0
+    maps_dir = Path(cfg["paths"]["output"]) / "maps"
+    if maps_dir.exists():
+        for old in maps_dir.glob("convection_*.png"):
+            old.unlink()
+        logger.info("Cleared old maps")
 
     if args.fxx is not None:
         run(cfg, run_date, run_hour, args.fxx)
