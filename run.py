@@ -1,7 +1,7 @@
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import yaml
@@ -70,26 +70,51 @@ def run(cfg, run_date, run_hour, fxx):
     logger.info("Done.")
 
 
+def find_latest_run(cfg, max_back_hours=24):
+    """Намира последния run с наличен IFS."""
+    from downloaders.ifs_downloader import download_ifs_mucape
+    from herbie import Herbie
+
+    now = datetime.now(timezone.utc)
+    for back in range(0, max_back_hours + 1, 6):
+        candidate = now - timedelta(hours=back)
+        run_hour = (candidate.hour // 6) * 6
+        date_str = candidate.strftime("%Y-%m-%d")
+        try:
+            H = Herbie(f"{date_str} {run_hour:02d}:00", model="ifs",
+                       product="oper", fxx=36)
+            if H.grib is not None:
+                logger.info(f"Latest available run: {date_str} {run_hour:02d}z")
+                return date_str, run_hour
+        except Exception:
+            continue
+    raise RuntimeError("No available IFS run found")
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/config.yaml")
-    parser.add_argument("--date",   default=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    parser.add_argument("--run",    type=int, default=0)
+    parser.add_argument("--date",   default=None)
+    parser.add_argument("--run",    type=int, default=None)
     parser.add_argument("--fxx",    type=int, default=None)
     parser.add_argument("--fmax",   type=int, default=36)
+    parser.add_argument("--auto",   action="store_true")
     args = parser.parse_args()
 
     cfg = load_cfg(args.config)
     Path("logs").mkdir(exist_ok=True)
 
+    if args.auto or args.date is None:
+        run_date, run_hour = find_latest_run(cfg)
+    else:
+        run_date, run_hour = args.date, args.run or 0
+
     if args.fxx is not None:
-        run(cfg, args.date, args.run, args.fxx)
+        run(cfg, run_date, run_hour, args.fxx)
     else:
         for fxx in range(0, args.fmax + 1, 3):
             try:
-                run(cfg, args.date, args.run, fxx)
+                run(cfg, run_date, run_hour, fxx)
             except Exception as e:
                 logger.error(f"F{fxx:03d} failed: {e}")
-
 if __name__ == "__main__":
     main()

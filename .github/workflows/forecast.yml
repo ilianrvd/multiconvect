@@ -2,7 +2,7 @@ name: Convective Forecast
 
 on:
   schedule:
-    - cron: "0 5,11,17,23 * * *"
+    - cron: "0 9,21 * * *"
   workflow_dispatch:
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
       - name: Run forecast
         shell: bash -l {0}
         run: |
-          python run.py --run 0
+          python run.py --auto
           python make_gallery.py
 
       - name: Commit and push maps
