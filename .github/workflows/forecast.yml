@@ -38,6 +38,7 @@ jobs:
       - name: Run forecast
         shell: bash -l {0}
         run: |
+          mkdir -p logs
           python run.py --auto
           python make_gallery.py
 
