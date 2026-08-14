@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def plot_map(high_polys, med_polys, low_polys, high_mask, med_mask, low_mask,
-             lat, lon, cfg, valid_time, out_path):
+             ocnl_mask, lat, lon, cfg, valid_time, out_path):
     colors = cfg["viz"]["colors"]
     alpha  = cfg["viz"].get("alpha", 0.4)
     domain = cfg["domain"]
@@ -22,6 +22,9 @@ def plot_map(high_polys, med_polys, low_polys, high_mask, med_mask, low_mask,
         HAS_CARTOPY = False
 
     fig = plt.figure(figsize=cfg["viz"]["figsize"])
+    import matplotlib as mpl
+    mpl.rcParams["hatch.color"] = "#CC0000"
+    mpl.rcParams["hatch.linewidth"] = 0.8
 
     if HAS_CARTOPY:
         proj = ccrs.PlateCarree()
@@ -46,11 +49,22 @@ def plot_map(high_polys, med_polys, low_polys, high_mask, med_mask, low_mask,
     ]:
         for poly in polys:
             _draw_polygon(ax, poly, color, alpha, zorder, transform)
+    # Плътност: OCNL щриховка (червено)
+    if ocnl_mask.sum() > 0:
+        m = np.ma.masked_where(~ocnl_mask, np.ones_like(ocnl_mask, dtype=float))
+        if transform is not None:
+            ax.contourf(lon, lat, m, levels=[0.5, 1.5],
+                        colors="none", hatches=["xxx"],
+                        transform=transform, zorder=6)
+        else:
+            ax.contourf(lon, lat, m, levels=[0.5, 1.5],
+                        colors="none", hatches=["xxx"], zorder=6)
     patches = [
         mpatches.Patch(facecolor=colors["HIGH"], alpha=0.7, label="HIGH (3 models)"),
         mpatches.Patch(facecolor=colors["MED"],  alpha=0.7, label="MED (2 models)"),
         mpatches.Patch(facecolor=colors["LOW"],  alpha=0.7, label="LOW (ICON only)"),
     ]
+    
     ax.legend(handles=patches, loc="lower left", fontsize=9, framealpha=0.85)
    
     ax.set_title(f"Valid: {valid_time}", fontsize=10, pad=5)

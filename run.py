@@ -58,16 +58,21 @@ def run(cfg, run_date, run_hour, fxx):
     high_polys = get_polygons(high_mask, lat_icon, lon_icon)
     med_polys  = get_polygons(med_mask,  lat_icon, lon_icon)
     low_polys  = get_polygons(low_mask,  lat_icon, lon_icon)
+
+    from classifier import subtract_polys
+    low_polys = subtract_polys(low_polys, med_polys + high_polys)
+    med_polys = subtract_polys(med_polys, high_polys)   
     logger.info(f"  HIGH={len(high_polys)} poly  MED={len(med_polys)}  LOW={len(low_polys)}")
 
-    from datetime import datetime, timedelta
+    from classifier import density_coverage
+    ocnl_mask = density_coverage(icon, cfg, lpi_threshold=25, cov_pct=65)
+
     base = datetime.strptime(f"{run_date} {run_hour:02d}", "%Y-%m-%d %H")
     valid_dt = base + timedelta(hours=fxx)
     valid_time = valid_dt.strftime("%Y-%m-%d %H:00 UTC")
     out_path = out_dir / f"convection_{run_date.replace('-','')}_{run_hour:02d}z_f{fxx:03d}.png"
     plot_map(high_polys, med_polys, low_polys, high_mask, med_mask, low_mask,
-             lat_icon, lon_icon, cfg, valid_time, out_path)
-    logger.info("Done.")
+             ocnl_mask, lat_icon, lon_icon, cfg, valid_time, out_path)
 
 
 def find_latest_run(cfg, max_back_hours=24):

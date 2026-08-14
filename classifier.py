@@ -90,3 +90,45 @@ def get_polygons(mask, lat, lon, min_distance_deg=0.25, min_pixels=10):
             merged.append(final)
 
     return merged
+
+def density_coverage(icon, cfg, window_km=50, lpi_threshold=25, cov_pct=65):
+    """
+    Плътност на конвекцията от суровото ICON LPI поле.
+    Връща една маска: OCNL (покритие >= cov_pct%).
+    """
+    from scipy.ndimage import uniform_filter
+
+    cells = (icon >= lpi_threshold).astype(np.float32)
+
+    px_per_cell = 7.0
+    win_px = max(3, int(round(window_km / px_per_cell)))
+    if win_px % 2 == 0:
+        win_px += 1
+
+    coverage = uniform_filter(cells, size=win_px, mode="constant") * 100.0
+    ocnl = coverage >= cov_pct
+
+    logger.info(f"  Density: OCNL={int(ocnl.sum())} pixels")
+    return ocnl
+
+def subtract_polys(base_polys, subtract_polys_list):
+    """Изважда subtract полигоните от base полигоните."""
+    from shapely.geometry import MultiPolygon
+    from shapely.ops import unary_union
+
+    if not base_polys:
+        return []
+    if not subtract_polys_list:
+        return base_polys
+
+    sub_union = unary_union(subtract_polys_list)
+    result = []
+    for p in base_polys:
+        diff = p.difference(sub_union)
+        if diff.is_empty:
+            continue
+        if diff.geom_type == "Polygon":
+            result.append(diff)
+        else:
+            result.extend(list(diff.geoms))
+    return result

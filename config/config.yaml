@@ -31,5 +31,5 @@ viz:
   alpha: 0.4
   colors:
     HIGH: "#FF8C00"
-    MED:  "#FFD700"
-    LOW:  "#00CC44"
+    MED:  "#4A7C2E"
+    LOW:  "#A8C77A"
