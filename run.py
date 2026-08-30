@@ -87,7 +87,7 @@ def find_latest_run(cfg, max_back_hours=24):
         date_str = candidate.strftime("%Y-%m-%d")
         try:
             H = Herbie(f"{date_str} {run_hour:02d}:00", model="ifs",
-                       product="oper", fxx=42)
+                       product="oper", fxx=48)
             if H.grib is not None:
                 logger.info(f"Latest available run: {date_str} {run_hour:02d}z")
                 return date_str, run_hour
@@ -101,7 +101,7 @@ def main():
     parser.add_argument("--date",   default=None)
     parser.add_argument("--run",    type=int, default=None)
     parser.add_argument("--fxx",    type=int, default=None)
-    parser.add_argument("--fmax",   type=int, default=42)
+    parser.add_argument("--fmax",   type=int, default=48)
     parser.add_argument("--auto",   action="store_true")
     args = parser.parse_args()
 
@@ -121,7 +121,7 @@ def main():
     if args.fxx is not None:
         run(cfg, run_date, run_hour, args.fxx)
     else:
-        for fxx in range(0, args.fmax + 1, 3):
+        for fxx in range(0, args.fmax + 1):
             try:
                 run(cfg, run_date, run_hour, fxx)
             except Exception as e:

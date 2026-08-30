@@ -5,7 +5,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def read_ifs_mucape(path: Path, domain: dict) -> tuple:
+def _read_single(path, domain):
     import cfgrib
     datasets = cfgrib.open_datasets(str(path))
     for ds in datasets:
@@ -16,11 +16,29 @@ def read_ifs_mucape(path: Path, domain: dict) -> tuple:
             if lat.ndim == 1:
                 lon, lat = np.meshgrid(lon, lat)
             vals = np.where(vals < 0, 0.0, vals)
-            vals, lat, lon = _crop(vals, lat, lon, domain)
-            logger.info(f"[IFS] MUCAPE: max={np.nanmax(vals):.1f} J/kg")
             return vals, lat, lon
+    raise RuntimeError(f"[IFS] mucape not found in {path}")
 
-    raise RuntimeError("[IFS] mucape not found in file")
+
+def read_ifs_mucape(paths, domain):
+    """
+    paths е tuple (path_lo, path_hi, weight_hi) от downloader-а.
+    Ако path_hi е None - директно четене. Иначе - интерполация.
+    """
+    path_lo, path_hi, w_hi = paths
+
+    vals_lo, lat, lon = _read_single(path_lo, domain)
+
+    if path_hi is not None:
+        vals_hi, _, _ = _read_single(path_hi, domain)
+        vals = (1.0 - w_hi) * vals_lo + w_hi * vals_hi
+        logger.info(f"[IFS] MUCAPE (interp w={w_hi:.2f}): max={np.nanmax(vals):.1f} J/kg")
+    else:
+        vals = vals_lo
+        logger.info(f"[IFS] MUCAPE: max={np.nanmax(vals):.1f} J/kg")
+
+    vals, lat, lon = _crop(vals, lat, lon, domain)
+    return vals, lat, lon
 
 
 def _crop(vals, lat, lon, d):
