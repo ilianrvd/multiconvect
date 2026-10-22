@@ -1,0 +1,11 @@
+herbie-data
+xarray
+cfgrib
+eccodes
+numpy
+scipy
+matplotlib==3.9
+cartopy
+shapely
+pyyaml
+requests

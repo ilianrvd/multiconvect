@@ -1,0 +1,11 @@
+data/
+output/
+logs/
+__pycache__/
+*.pyc
+*.idx
+*.grib2
+*.bz2
+.herbie/
+docs/maps/
+docs/index.html
