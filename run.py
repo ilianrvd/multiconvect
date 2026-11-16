@@ -85,7 +85,11 @@ def run(cfg, run_date, run_hour, fxx):
         htop = np.zeros_like(icon)
     mask_dir = data_dir / "masks"
     mask_dir.mkdir(parents=True, exist_ok=True)
+    thr = cfg["models"]
+    act = (icon >= thr["icon"]["threshold"]) & (
+        (gfs_r >= thr["gfs"]["threshold"]) | (ifs_r >= thr["ifs"]["threshold"]))
     np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
+                        low=low_mask, act=act,
                         lat=lat_icon, lon=lon_icon, htop=htop,
                         valid=valid_dt.isoformat(),
                         run=f"{run_date[8:10]}.{run_date[5:7]} {run_hour:02d}z")

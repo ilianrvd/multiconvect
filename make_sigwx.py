@@ -23,10 +23,33 @@ from classifier import get_polygons
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
+# Colour = risk x density (fill, edge)
+#   LOW (any)            -> light green
+#   MED ISOL             -> dark green
+#   HIGH ISOL / MED OCNL -> yellow
+#   HIGH OCNL / FRQ      -> orange
 COLORS = {
-    "HIGH": ("#EDE53A", "#A59C00"),   # fill, edge
-    "MED":  ("#90D890", "#2E8B2E"),
+    "light_green": ("#C5E3A6", "#7BA85A"),
+    "dark_green":  ("#5FA35C", "#2F7A2C"),
+    "yellow":      ("#F2E04A", "#B8A000"),
+    "orange":      ("#F59E2E", "#C06A00"),
 }
+COV_OCNL = 0.25    # active share of the zone -> OCNL
+COV_FRQ = 0.50     # -> FRQ
+
+
+def coverage_class(cov):
+    return "FRQ" if cov >= COV_FRQ else "OCNL" if cov >= COV_OCNL else "ISOL"
+
+
+def colour_for(level, cov_class):
+    if level == "LOW":
+        return "light_green"
+    if level == "MED":
+        return {"ISOL": "dark_green", "OCNL": "yellow"}.get(cov_class, "orange")
+    return "yellow" if cov_class == "ISOL" else "orange"
+
+
 AIRPORTS = {
     "LBSF": (42.695, 23.406), "LBPD": (42.068, 24.851), "LBBG": (42.570, 27.515),
     "LBWN": (43.232, 27.825), "LBGO": (43.152, 25.713),
@@ -40,6 +63,9 @@ def load_frames(mask_dir):
         d = np.load(f, allow_pickle=True)
         valid = datetime.fromisoformat(str(d["valid"]))
         frames[valid] = {k: d[k] for k in ("high", "med", "lat", "lon", "htop")}
+        # older files: no LOW mask / active cells
+        frames[valid]["low"] = d["low"] if "low" in d.files else np.zeros_like(d["high"])
+        frames[valid]["act"] = d["act"] if "act" in d.files else d["high"]
         frames[valid]["run"] = str(d["run"])
     return frames
 
@@ -151,7 +177,23 @@ def segment_info(seg, frames):
     union = np.zeros_like(next(iter(seg["masks"].values())))
     for m in seg["masks"].values():
         union |= m
-    return win, (to_fl(max(tops)) if tops else None), union
+    covs = [float((frames[h]["act"] & m).sum()) / m.sum() for h, m in seg["masks"].items() if m.any()]
+    return win, (to_fl(max(tops)) if tops else None), union, (max(covs) if covs else 0.0)
+
+
+def poly_info(p, masks, hours, frames, lat, lon):
+    """Window and FL for one polygon of a non-tracked (6 h) layer."""
+    inside = shapely.contains_xy(p, lon.ravel(), lat.ravel()).reshape(lat.shape)
+    present, tops = [], []
+    for h in hours:
+        sel = masks[h] & inside
+        if sel.any():
+            present.append(h)
+            tops.append(float(frames[h]["htop"][sel].max()))
+    if not present:
+        return None, None
+    win = f"{hh(present[0])}-{hh(present[-1] + timedelta(hours=1), True)}"
+    return win, (to_fl(max(tops)) if tops else None)
 
 
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
@@ -187,28 +229,46 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         lat = frames[hours[0]]["lat"]
         lon = frames[hours[0]]["lon"]
         level_masks = {
+            "LOW":  {h: frames[h]["low"] | frames[h]["med"] | frames[h]["high"] for h in hours},
             "MED":  {h: frames[h]["high"] | frames[h]["med"] for h in hours},
             "HIGH": {h: frames[h]["high"].copy() for h in hours},
         }
-        polys = {"MED": [], "HIGH": []}
+        polys = {"LOW": [], "MED": [], "HIGH": []}   # (polygon, window, FL, colour)
+
+        # LOW: one 6-hour polygon, not tracked, always light green
+        low_union = np.zeros_like(lat, dtype=bool)
+        for h in hours:
+            low_union |= level_masks["LOW"][h]
+        for p in get_polygons(low_union, lat, lon):
+            win, fl = poly_info(p, level_masks["LOW"], hours, frames, lat, lon)
+            if win:
+                polys["LOW"].append((p, win, fl, "light_green"))
+
+        # MED / HIGH: tracked periods, colour from density
         for key in ("MED", "HIGH"):
             for seg in track_segments(level_masks[key], hours, lat, lon):
-                win, fl, union = segment_info(seg, frames)
+                win, fl, union, cov = segment_info(seg, frames)
+                cls = coverage_class(cov)
+                logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  cov={cov:.0%} -> {cls}")
                 for p in get_polygons(union, lat, lon):
-                    polys[key].append((p, win, fl))
-        high_union = shapely.union_all([p for p, _, _ in polys["HIGH"]]) if polys["HIGH"] else None
+                    polys[key].append((p, win, fl, colour_for(key, cls)))
 
-        for key, z in (("MED", 1), ("HIGH", 2)):
-            fill, edge = COLORS[key]
-            for p, win, fl in polys[key]:
+        inner = {"LOW": "MED", "MED": "HIGH"}
+        unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
+
+        for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
+            for p, win, fl, col in polys[key]:
+                fill, edge = COLORS[col]
                 for g in ([p] if p.geom_type == "Polygon" else list(p.geoms)):
                     x, y = g.exterior.xy
-                    ax.fill(x, y, facecolor=fill, alpha=0.5, edgecolor=edge,
+                    ax.fill(x, y, facecolor=fill, alpha=0.55, edgecolor=edge,
                             linewidth=1.5, transform=proj, zorder=z)
-                # MED arrow points to the green ring, not into the yellow core
+                # arrow points to the ring of this level, not into the inner one
                 anchor = p
-                if key == "MED" and high_union is not None:
-                    ring = p.difference(high_union)
+                if key in inner and unions[inner[key]] is not None:
+                    ring = p.difference(unions[inner[key]])
+                    if key == "LOW" and ring.area < 0.2 * p.area:
+                        continue                 # LOW hidden under MED - no label
                     if not ring.is_empty:
                         anchor = ring
                 labels.append((key, p, anchor.representative_point(),
@@ -220,8 +280,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         step = 0.22 * (k % 3)                    # stagger neighbouring labels
         if key == "HIGH":
             tx, ty = c.x + 0.2, min(y1 + 0.35 + step, d["lat_max"] - 0.3)
-        else:
+        elif key == "MED":
             tx, ty = c.x - 0.8, max(y0 - 0.45 - step, d["lat_min"] + 0.15)
+        else:                                    # LOW: to the left of the zone
+            tx, ty = max(x0 - 1.6, d["lon_min"] + 0.1), c.y + step
         ax.annotate(txt, xy=(c.x, c.y), xytext=(tx, ty), fontsize=9, zorder=6,
                     bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#888888"),
                     arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
@@ -229,8 +291,12 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     ax.set_title(f"FIR SIGWX  CB  (experimental)   VALID {hh(b0)}-{hh(b1, True)} UTC "
                  f"{b0:%d.%m.%Y}   |   RUN {run_label}", fontsize=11)
     ax.legend(handles=[
-        mpatches.Patch(facecolor=COLORS["HIGH"][0], edgecolor=COLORS["HIGH"][1], label="HIGH"),
-        mpatches.Patch(facecolor=COLORS["MED"][0], edgecolor=COLORS["MED"][1], label="MED"),
+        mpatches.Patch(facecolor=COLORS[c][0], edgecolor=COLORS[c][1], label=t) for c, t in (
+            ("orange", "HIGH OCNL/FRQ, MED FRQ"),
+            ("yellow", "HIGH ISOL, MED OCNL"),
+            ("dark_green", "MED ISOL"),
+            ("light_green", "LOW"),
+        )
     ], loc="lower right", fontsize=9, framealpha=0.9)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -257,7 +323,7 @@ img{{width:100%;display:block;background:#fff}} figcaption{{padding:8px 12px;fon
 a{{color:#8ab4d8}}
 </style></head><body>
 <h1>FIR SIGWX CB &mdash; experimental</h1>
-<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; HIGH = 3 models, MED = ICON + 1 &middot; <a href="../">hourly maps</a></div>
+<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; colour = risk (LOW/MED/HIGH) x density (ISOL/OCNL/FRQ) &middot; <a href="../">hourly maps</a></div>
 {cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
