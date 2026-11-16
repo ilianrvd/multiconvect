@@ -182,15 +182,30 @@ def track_segments(masks, hours, lat, lon):
     return out
 
 
+DENS_WIN = 7        # ~50 km window on the ICON grid (0.0625 deg)
+
+
+def _top(values):
+    return to_fl(float(np.percentile(values, 90))) if len(values) else None
+
+
 def segment_info(seg, frames):
+    """Window, FL (90th pct), union mask and max local density of active cells."""
+    from scipy.ndimage import uniform_filter
     hrs = sorted(seg["hours"])
     win = f"{hh(hrs[0])}-{hh(hrs[-1] + timedelta(hours=1), True)}"
-    tops = [float(frames[h]["htop"][m].max()) for h, m in seg["masks"].items() if m.any()]
     union = np.zeros_like(next(iter(seg["masks"].values())))
-    for m in seg["masks"].values():
+    dens = np.zeros(union.shape, dtype=np.float32)
+    tops = []
+    for h, m in seg["masks"].items():
+        if not m.any():
+            continue
         union |= m
-    covs = [float((frames[h]["act"] & m).sum()) / m.sum() for h, m in seg["masks"].items() if m.any()]
-    return win, (to_fl(max(tops)) if tops else None), union, (max(covs) if covs else 0.0)
+        v = frames[h]["htop"][m]
+        tops.extend(v[v > 0].tolist())
+        act = (frames[h]["act"] & m).astype(np.float32)
+        dens = np.maximum(dens, uniform_filter(act, size=DENS_WIN, mode="constant"))
+    return win, _top(tops), union, np.where(union, dens, 0.0)
 
 
 def poly_info(p, masks, hours, frames, lat, lon):
@@ -201,11 +216,12 @@ def poly_info(p, masks, hours, frames, lat, lon):
         sel = masks[h] & inside
         if sel.any():
             present.append(h)
-            tops.append(float(frames[h]["htop"][sel].max()))
+            v = frames[h]["htop"][sel]
+            tops.extend(v[v > 0].tolist())
     if not present:
         return None, None
     win = f"{hh(present[0])}-{hh(present[-1] + timedelta(hours=1), True)}"
-    return win, (to_fl(max(tops)) if tops else None)
+    return win, _top(tops)
 
 
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
@@ -256,14 +272,30 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
             if win:
                 polys["LOW"].append((p, win, fl, "light_green"))
 
-        # MED / HIGH: tracked periods, colour from density
+        # MED / HIGH: tracked periods. Base zone in the ISOL colour, dense parts on top
+        dense = []                                   # (polygon, colour) - no labels
+        base_col = {"MED": "dark_green", "HIGH": "yellow"}
         for key in ("MED", "HIGH"):
             for seg in track_segments(level_masks[key], hours, lat, lon):
-                win, fl, union, cov = segment_info(seg, frames)
-                cls = coverage_class(cov)
-                logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  cov={cov:.0%} -> {cls}")
-                for p in get_polygons(union, lat, lon):
-                    polys[key].append((p, win, fl, colour_for(key, cls)))
+                win, fl, union, dens = segment_info(seg, frames)
+                seg_polys = get_polygons(union, lat, lon)
+                for p in seg_polys:
+                    polys[key].append((p, win, fl, base_col[key]))
+                if not seg_polys:
+                    continue
+                zone = shapely.union_all(seg_polys)
+                n = int(union.sum())
+                parts = []
+                for cls, lo_, hi_ in (("OCNL", COV_OCNL, COV_FRQ), ("FRQ", COV_FRQ, 9.9)):
+                    sub = (dens >= lo_) & (dens < hi_) if cls == "OCNL" else dens >= lo_
+                    share = float(sub.sum()) / max(n, 1)
+                    parts.append(f"{cls}={share:.0%}")
+                    col = colour_for(key, cls)
+                    for q in get_polygons(sub, lat, lon, min_pixels=6):
+                        q = q.intersection(zone)
+                        if not q.is_empty and q.area > 0:
+                            dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3))
+                logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}")
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
@@ -286,16 +318,36 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                 labels.append((key, p, anchor.representative_point(),
                                f"{win} / {key} / {fl if fl else '---'}"))
 
-    # HIGH labels above the zone, MED labels below
+    if hours:
+        for q, col, z in sorted(dense, key=lambda t: t[2]):
+            fill, edge = COLORS[col]
+            for g in ([q] if q.geom_type == "Polygon" else [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
+                x, y = g.exterior.xy
+                ax.fill(x, y, facecolor=fill, alpha=0.8, edgecolor=edge,
+                        linewidth=1.0, transform=proj, zorder=z)
+
+    # HIGH labels above the zone, MED below, LOW left; shifted until they do not overlap
+    placed = []
+
+    def free_spot(tx, ty, txt, direction):
+        w, hgt = 0.075 * len(txt) + 0.1, 0.22
+        for _ in range(12):
+            box = (tx, ty, tx + w, ty + hgt)
+            if not any(box[0] < o[2] and o[0] < box[2] and box[1] < o[3] and o[1] < box[3] for o in placed):
+                break
+            ty += direction * 0.26
+        ty = min(max(ty, d["lat_min"] + 0.1), d["lat_max"] - 0.35)
+        placed.append((tx, ty, tx + w, ty + hgt))
+        return tx, ty
+
     for k, (key, p, c, txt) in enumerate(labels):
         x0, y0, x1, y1 = p.bounds
-        step = 0.22 * (k % 3)                    # stagger neighbouring labels
         if key == "HIGH":
-            tx, ty = c.x + 0.2, min(y1 + 0.35 + step, d["lat_max"] - 0.3)
+            tx, ty = free_spot(c.x + 0.2, y1 + 0.3, txt, +1)
         elif key == "MED":
-            tx, ty = c.x - 0.8, max(y0 - 0.45 - step, d["lat_min"] + 0.15)
+            tx, ty = free_spot(c.x - 0.8, y0 - 0.5, txt, -1)
         else:                                    # LOW: to the left of the zone
-            tx, ty = max(x0 - 1.6, d["lon_min"] + 0.1), c.y + step
+            tx, ty = free_spot(max(x0 - 1.6, d["lon_min"] + 0.1), c.y, txt, +1)
         ax.annotate(txt, xy=(c.x, c.y), xytext=(tx, ty), fontsize=9, zorder=6,
                     bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#888888"),
                     arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
