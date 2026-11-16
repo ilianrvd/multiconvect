@@ -1,0 +1,40 @@
+name: Compare GFS fields
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:  {description: "Run date YYYY-MM-DD", required: true}
+      hour:  {description: "Run hour", required: true, default: "12"}
+      steps: {description: "Forecast steps", required: true, default: "6 9 12 15 18"}
+
+permissions:
+  contents: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: mc
+          create-args: >-
+            python=3.11 xarray cfgrib eccodes scipy numpy matplotlib=3.9
+            cartopy shapely pyyaml requests
+
+      - name: Compare
+        shell: bash -l {0}
+        run: |
+          pip install herbie-data
+          python tools/compare_gfs.py ${{ inputs.date }} ${{ inputs.hour }} ${{ inputs.steps }}
+
+      - name: Publish to branch "compare"
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout --orphan compare
+          git rm -rf --cached . > /dev/null
+          git add -f compare/
+          git commit -m "Compare GFS REFC vs CPRAT ${{ inputs.date }} ${{ inputs.hour }}z"
+          git push -f origin compare
