@@ -111,6 +111,18 @@ MIN_MED_KM2 = 2000  # smaller MED zones are dropped
 INSIDE_SHARE = 0.8  # a polygon mostly inside a bigger one of the same level is dropped
 
 
+def _merge_win(a, b):
+    """'00-02' + '03-04' -> '00-04' (windows inside one 6 h block)."""
+    a0, a1 = (int(x) for x in a.split("-"))
+    b0, b1 = (int(x) for x in b.split("-"))
+    if a1 < a0:
+        a1 += 24
+    if b1 < b0:
+        b1 += 24
+    lo, hi = min(a0, b0), max(a1, b1)
+    return f"{lo % 24:02d}-{24 if hi % 24 == 0 and hi > lo else hi % 24:02d}"
+
+
 def _win_hours(win):
     a, b = (int(x) for x in win.split("-"))
     return (b - a) % 24 or 24
@@ -343,18 +355,40 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                 logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
                             f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
 
-        # drop a polygon that lies mostly inside a bigger one of the same level
+        # a polygon mostly inside a bigger one of the same level is merged into it:
+        # one polygon, period widened to cover both, higher FL
         for key in ("MED", "HIGH"):
             keep = []
-            items = sorted(polys[key], key=lambda t: -t[0].area)
-            for i, item in enumerate(items):
-                p = item[0]
-                if any(p.intersection(o[0]).area >= INSIDE_SHARE * p.area for o in items[:i]):
+            for item in sorted(polys[key], key=lambda t: -t[0].area):
+                p, win, fl, col = item
+                host = next((i for i, o in enumerate(keep)
+                             if p.intersection(o[0]).area >= INSIDE_SHARE * p.area), None)
+                if host is None:
+                    keep.append(list(item))
                     continue
-                keep.append(item)
-            polys[key] = keep
+                h = keep[host]
+                h[1] = _merge_win(h[1], win)
+                h[2] = max([x for x in (h[2], fl) if x] or [None])
+            polys[key] = [tuple(k) for k in keep]
+
+        # MED dense parts are not drawn where a HIGH zone already is (yellow over yellow)
+        if polys["HIGH"]:
+            hu = shapely.union_all([q[0] for q in polys["HIGH"]])
+            clipped = []
+            for q, col, z in dense:
+                if z == 3:                                   # MED OCNL / FRQ
+                    q = q.difference(hu)
+                if not q.is_empty and q.area > 0:
+                    clipped.append((q, col, z))
+            dense = clipped
         dense = [t for t in dense
                  if any(t[0].intersects(q[0]) for k in ("MED", "HIGH") for q in polys[k])]
+        # one outline per colour: overlapping dense parts of different periods are merged
+        merged, zs = {}, {}
+        for q, col, z in dense:
+            merged.setdefault(col, []).append(q)
+            zs[col] = max(zs.get(col, 0), z)
+        dense = [(shapely.union_all(v), col, zs[col]) for col, v in merged.items()]
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
