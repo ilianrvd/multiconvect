@@ -26,9 +26,9 @@ models:
 expand_pixels: 3
 
 sigwx:
-  act_lpi: 25
-  ocnl: 0.40
-  frq: 0.70
+  act_lpi: 20
+  ocnl: 0.30
+  frq: 0.60
 
 viz:
   dpi: 150
