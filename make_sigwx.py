@@ -318,8 +318,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         base_col = {"MED": "dark_green", "HIGH": "yellow"}
         for key in ("MED", "HIGH"):
             for seg in track_segments(level_masks[key], hours, lat, lon):
-                if len(seg["hours"]) < MIN_HOURS:      # short-lived zone
-                    continue
+                if key == "MED" and len(seg["hours"]) < MIN_HOURS:   # short-lived MED zone
+                    continue                                          # (HIGH kept even for 1 h)
                 win, fl, union, dens = segment_info(seg, frames)
                 seg_polys = get_polygons(union, lat, lon)
                 if key == "MED":                       # drop small MED zones
