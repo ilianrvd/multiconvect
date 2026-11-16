@@ -1,0 +1,5 @@
+16.11 18Z  REFC>=20:   194 px   CPRAT>=0.5:     1 px   CPRAT max 0.6 mm/h
+16.11 21Z  REFC>=20:   139 px   CPRAT>=0.5:     1 px   CPRAT max 0.7 mm/h
+17.11 00Z  REFC>=20:   105 px   CPRAT>=0.5:    22 px   CPRAT max 1.4 mm/h
+17.11 03Z  REFC>=20:   155 px   CPRAT>=0.5:    30 px   CPRAT max 1.5 mm/h
+17.11 06Z  REFC>=20:   141 px   CPRAT>=0.5:    13 px   CPRAT max 2.6 mm/h
