@@ -108,7 +108,9 @@ MAX_HOURS = 3      # a changing zone is split at least every 3 hours
 MIN_HOURS = 2      # shorter pieces are merged into the neighbouring period
 MIN_PIXELS = 10
 MIN_MED_KM2 = 2000  # smaller MED zones are dropped
-INSIDE_SHARE = 0.8  # a polygon mostly inside a bigger one of the same level is dropped
+INSIDE_SHARE = 0.5  # same-level polygons overlapping at least this share (of the smaller) are merged
+NEST_SHARE = 0.8   # ...or merged regardless of time when this share lies inside
+MAX_MED_LABELS = 5  # label cap for MED zones (largest first); HIGH always labelled
 
 
 def _merge_win(a, b):
@@ -121,6 +123,17 @@ def _merge_win(a, b):
         b1 += 24
     lo, hi = min(a0, b0), max(a1, b1)
     return f"{lo % 24:02d}-{24 if hi % 24 == 0 and hi > lo else hi % 24:02d}"
+
+
+def _win_span(win):
+    a, b = (int(x) for x in win.split("-"))
+    return a, (b + 24 if b <= a else b)
+
+
+def _win_overlap(w1, w2):
+    a0, a1 = _win_span(w1)
+    b0, b1 = _win_span(w2)
+    return a0 < b1 and b0 < a1
 
 
 def _win_hours(win):
@@ -355,21 +368,33 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                 logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
                             f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
 
-        # a polygon mostly inside a bigger one of the same level is merged into it:
-        # one polygon, period widened to cover both, higher FL
+        # same-level polygons that overlap at least half (of the smaller one) are merged:
+        # one outline (union), period widened to cover both, higher FL
         for key in ("MED", "HIGH"):
-            keep = []
-            for item in sorted(polys[key], key=lambda t: -t[0].area):
-                p, win, fl, col = item
-                host = next((i for i, o in enumerate(keep)
-                             if p.intersection(o[0]).area >= INSIDE_SHARE * p.area), None)
-                if host is None:
-                    keep.append(list(item))
-                    continue
-                h = keep[host]
-                h[1] = _merge_win(h[1], win)
-                h[2] = max([x for x in (h[2], fl) if x] or [None])
-            polys[key] = [tuple(k) for k in keep]
+            items = [list(t) for t in polys[key]]
+            changed = True
+            while changed:
+                changed = False
+                items.sort(key=lambda t: -t[0].area)
+                for i in range(len(items)):
+                    for j in range(i + 1, len(items)):
+                        a, b = items[i], items[j]
+                        small = min(a[0].area, b[0].area)
+                        if small <= 0:
+                            continue
+                        share = a[0].intersection(b[0]).area / small
+                        # same place at the same time, or one almost entirely inside the other;
+                        # consecutive periods of a moving zone stay separate
+                        if (share >= INSIDE_SHARE and _win_overlap(a[1], b[1])) or share >= NEST_SHARE:
+                            a[0] = a[0].union(b[0])
+                            a[1] = _merge_win(a[1], b[1])
+                            a[2] = max([x for x in (a[2], b[2]) if x] or [None])
+                            items.pop(j)
+                            changed = True
+                            break
+                    if changed:
+                        break
+            polys[key] = [tuple(t) for t in items]
 
         # MED dense parts are not drawn where a HIGH zone already is (yellow over yellow)
         if polys["HIGH"]:
@@ -400,6 +425,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     x, y = g.exterior.xy
                     ax.fill(x, y, facecolor=fill, alpha=0.55, edgecolor=edge,
                             linewidth=1.5, transform=proj, zorder=z)
+                if key == "LOW":
+                    continue                     # LOW is background - no label
                 # arrow points to the ring of this level, not into the inner one
                 anchor = p
                 if key in inner and unions[inner[key]] is not None:
@@ -433,6 +460,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         placed.append((tx, ty, tx + w, ty + hgt))
         return tx, ty
 
+    high_l = [t for t in labels if t[0] == "HIGH"]
+    med_l = sorted([t for t in labels if t[0] == "MED"], key=lambda t: -t[1].area)[:MAX_MED_LABELS]
+    labels = high_l + med_l
     for k, (key, p, c, txt) in enumerate(labels):
         x0, y0, x1, y1 = p.bounds
         if key == "HIGH":
