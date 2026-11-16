@@ -107,6 +107,18 @@ STILL_SHARE = 0.8  # above this the zone counts as stationary (no 3 h cap)
 MAX_HOURS = 3      # a changing zone is split at least every 3 hours
 MIN_HOURS = 2      # shorter pieces are merged into the neighbouring period
 MIN_PIXELS = 10
+MIN_MED_KM2 = 2000  # smaller MED zones are dropped
+INSIDE_SHARE = 0.8  # a polygon mostly inside a bigger one of the same level is dropped
+
+
+def _win_hours(win):
+    a, b = (int(x) for x in win.split("-"))
+    return (b - a) % 24 or 24
+
+
+def _area_km2(p):
+    lat0 = p.centroid.y
+    return p.area * 111.0 * 111.0 * np.cos(np.radians(lat0))
 
 
 def _centroid(mask, lat, lon):
@@ -295,8 +307,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         for h in hours:
             low_union |= level_masks["LOW"][h]
         for p in get_polygons(low_union, lat, lon):
+            if _area_km2(p) < MIN_MED_KM2:
+                continue
             win, fl = poly_info(p, level_masks["LOW"], hours, frames, lat, lon)
-            if win:
+            if win and _win_hours(win) >= MIN_HOURS:
                 polys["LOW"].append((p, win, fl, "light_green"))
 
         # MED / HIGH: tracked periods. Base zone in the ISOL colour, dense parts on top
@@ -304,8 +318,12 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         base_col = {"MED": "dark_green", "HIGH": "yellow"}
         for key in ("MED", "HIGH"):
             for seg in track_segments(level_masks[key], hours, lat, lon):
+                if len(seg["hours"]) < MIN_HOURS:      # short-lived zone
+                    continue
                 win, fl, union, dens = segment_info(seg, frames)
                 seg_polys = get_polygons(union, lat, lon)
+                if key == "MED":                       # drop small MED zones
+                    seg_polys = [p for p in seg_polys if _area_km2(p) >= MIN_MED_KM2]
                 for p in seg_polys:
                     polys[key].append((p, win, fl, base_col[key]))
                 if not seg_polys:
@@ -324,6 +342,19 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                             dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3))
                 logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
                             f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
+
+        # drop a polygon that lies mostly inside a bigger one of the same level
+        for key in ("MED", "HIGH"):
+            keep = []
+            items = sorted(polys[key], key=lambda t: -t[0].area)
+            for i, item in enumerate(items):
+                p = item[0]
+                if any(p.intersection(o[0]).area >= INSIDE_SHARE * p.area for o in items[:i]):
+                    continue
+                keep.append(item)
+            polys[key] = keep
+        dense = [t for t in dense
+                 if any(t[0].intersects(q[0]) for k in ("MED", "HIGH") for q in polys[k])]
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
