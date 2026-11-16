@@ -370,10 +370,11 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
 
 
 def write_page(out_dir, items, run_label):
+    stamp = datetime.utcnow().strftime("%Y%m%d%H%M")   # cache-busting: same file names every run
     days = {}
     for f, t, day in items:
         days.setdefault(day, []).append(
-            f'<figure><img src="{f}" alt="{t}"><figcaption>{t}</figcaption></figure>')
+            f'<figure><img src="{f}?v={stamp}" alt="{t}"><figcaption>{t}</figcaption></figure>')
     cards = "".join(f'<h2>{day}</h2><div class="grid">{"".join(c)}</div>' for day, c in days.items())
     html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
