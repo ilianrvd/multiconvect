@@ -2,8 +2,9 @@
 make_sigwx.py
 FIR SIGWX CB product from the hourly MultiConvect masks.
 6-hour maps from the run's block until 24 UTC of the next day. HIGH = yellow, MED = green.
-Label: "HH-HH / HIGH|MED / FLxxx". A moving zone is split into
-consecutive period polygons (new one after ~50 km shift, min 2 h).
+Label: "HH-HH / HIGH|MED / FLxxx". A moving or spreading zone is split into
+consecutive period polygons (overlap < 50 % with the start area, 50 km shift,
+or 3 h if the zone changes; min 2 h).
 Experimental - not an official product.
 """
 import logging
@@ -94,6 +95,9 @@ def to_fl(meters):
 
 
 SHIFT_KM = 50      # centroid shift that starts a new period polygon
+KEEP_SHARE = 0.5   # new period when less than this share of the zone is inside the start footprint
+STILL_SHARE = 0.8  # above this the zone counts as stationary (no 3 h cap)
+MAX_HOURS = 3      # a changing zone is split at least every 3 hours
 MIN_HOURS = 2      # shorter pieces are merged into the neighbouring period
 MIN_PIXELS = 10
 
@@ -120,7 +124,15 @@ def track_segments(masks, hours, lat, lon):
     tracks, active = [], []
 
     def new_seg(h, m):
-        return {"hours": [h], "masks": {h: m}, "c0": _centroid(m, lat, lon)}
+        return {"hours": [h], "masks": {h: m}, "c0": _centroid(m, lat, lon), "m0": m}
+
+    def starts_new_period(seg, m):
+        if _dist_km(_centroid(m, lat, lon), seg["c0"]) > SHIFT_KM:
+            return True
+        share = float((m & seg["m0"]).sum()) / max(m.sum(), 1)
+        if share < KEEP_SHARE:                   # zone has left / spread out of its start area
+            return True
+        return len(seg["hours"]) >= MAX_HOURS and share < STILL_SHARE
 
     for h in hours:
         lab, n = label(masks[h])
@@ -140,7 +152,7 @@ def track_segments(masks, hours, lat, lon):
         for i, m in assigned.items():
             t = active[i]
             seg = t["segs"][-1]
-            if _dist_km(_centroid(m, lat, lon), seg["c0"]) > SHIFT_KM:
+            if starts_new_period(seg, m):
                 t["segs"].append(new_seg(h, m))
             else:
                 seg["hours"].append(h)
@@ -297,7 +309,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
             ("dark_green", "MED ISOL"),
             ("light_green", "LOW"),
         )
-    ], loc="lower right", fontsize=9, framealpha=0.9)
+    ], loc="upper center", bbox_to_anchor=(0.5, -0.01), ncol=4, fontsize=9, frameon=False)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=120, bbox_inches="tight")
