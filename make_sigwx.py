@@ -69,7 +69,9 @@ def load_frames(mask_dir):
         # older files: no LOW mask / active cells
         frames[valid]["low"] = d["low"] if "low" in d.files else np.zeros_like(d["high"])
         if "lpi" in d.files and "other" in d.files:
-            frames[valid]["act"] = (d["lpi"].astype(np.float32) >= ACT_LPI) & d["other"]
+            frames[valid]["lpi"] = d["lpi"].astype(np.float32)
+            frames[valid]["other"] = d["other"]
+            frames[valid]["act"] = (frames[valid]["lpi"] >= ACT_LPI) & d["other"]
         else:
             frames[valid]["act"] = d["act"] if "act" in d.files else d["high"]
         frames[valid]["run"] = str(d["run"])
@@ -215,6 +217,24 @@ def segment_info(seg, frames):
     return win, _top(tops), union, np.where(union, dens, 0.0)
 
 
+def calib(seg, frames):
+    """Calibration: max of the period-mean density for several LPI thresholds."""
+    from scipy.ndimage import uniform_filter
+    out = []
+    for t in (10, 15, 20, 25):
+        dens, n = None, 0
+        for h, m in seg["masks"].items():
+            fr = frames[h]
+            if not m.any() or fr.get("lpi") is None:
+                continue
+            a = ((fr["lpi"] >= t) & fr["other"] & m).astype(np.float32)
+            f = uniform_filter(a, size=DENS_WIN, mode="constant")
+            dens = f if dens is None else dens + f
+            n += 1
+        out.append("--" if dens is None else f"{(dens / n).max():.0%}")
+    return "/".join(out)
+
+
 def poly_info(p, masks, hours, frames, lat, lon):
     """Window and FL for one polygon of a non-tracked (6 h) layer."""
     inside = shapely.contains_xy(p, lon.ravel(), lat.ravel()).reshape(lat.shape)
@@ -302,7 +322,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                         q = q.intersection(zone)
                         if not q.is_empty and q.area > 0:
                             dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3))
-                logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}")
+                logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
+                            f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
