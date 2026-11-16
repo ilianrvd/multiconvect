@@ -48,6 +48,7 @@ jobs:
           mkdir -p logs
           python run.py --auto
           python make_gallery.py
+          python make_sigwx.py
 
       - uses: actions/upload-pages-artifact@v3
         with:

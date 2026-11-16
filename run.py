@@ -4,6 +4,7 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 logging.basicConfig(
@@ -70,6 +71,24 @@ def run(cfg, run_date, run_hour, fxx):
     base = datetime.strptime(f"{run_date} {run_hour:02d}", "%Y-%m-%d %H")
     valid_dt = base + timedelta(hours=fxx)
     valid_time = valid_dt.strftime("%Y-%m-%d %H:00 UTC")
+
+    # SIGWX: hourly masks + convective top (ICON HTOP_CON)
+    try:
+        from downloaders.icon_downloader import download_icon_field
+        from readers.icon_reader import read_icon_field
+        htop_file = download_icon_field(run_date, run_hour, fxx, data_dir / "icon", "htop_con")
+        htop, _, _ = read_icon_field(htop_file, cfg["domain"])
+        if htop.shape != icon.shape:
+            raise ValueError(f"HTOP shape {htop.shape} != LPI {icon.shape}")
+    except Exception as e:
+        logger.warning(f"[ICON] HTOP_CON F{fxx:03d}: {e}")
+        htop = np.zeros_like(icon)
+    mask_dir = data_dir / "masks"
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
+                        lat=lat_icon, lon=lon_icon, htop=htop,
+                        valid=valid_dt.isoformat(),
+                        run=f"{run_date[8:10]}.{run_date[5:7]} {run_hour:02d}z")
     out_path = out_dir / f"convection_{run_date.replace('-','')}_{run_hour:02d}z_f{fxx:03d}.png"
     plot_map(high_polys, med_polys, low_polys, high_mask, med_mask, low_mask,
              ocnl_mask, lat_icon, lon_icon, cfg, valid_time, out_path)
@@ -126,6 +145,8 @@ def main():
         for old in maps_dir.glob("convection_*.png"):
             old.unlink()
         logger.info("Cleared old maps")
+    for old in (Path(cfg["paths"]["data"]) / "masks").glob("f*.npz"):
+        old.unlink()
 
     if args.fxx is not None:
         run(cfg, run_date, run_hour, args.fxx)

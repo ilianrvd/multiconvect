@@ -4,10 +4,10 @@ paths:
   data:   "data/"
   
 domain:
-  lat_min: 40.0
-  lat_max: 44.5
-  lon_min: 22.0
-  lon_max: 28.5
+  lat_min: 40.3
+  lat_max: 45.1
+  lon_min: 21.1
+  lon_max: 31.3
 
 models:
   gfs:
