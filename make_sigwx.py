@@ -2,7 +2,8 @@
 make_sigwx.py
 FIR SIGWX CB product from the hourly MultiConvect masks.
 6-hour maps from the run's block until 24 UTC of the next day. HIGH = yellow, MED = green.
-Label: "HH-HH / HIGH|MED / FLxxx"
+Label: "HH-HH / HIGH|MED / FLxxx". A moving zone is split into
+consecutive period polygons (new one after ~50 km shift, min 2 h).
 Experimental - not an official product.
 """
 import logging
@@ -66,25 +67,91 @@ def to_fl(meters):
     return int(round(meters * M_TO_FT / 100 / 10) * 10)
 
 
-def describe(poly, hours, frames, key):
-    """Time window inside the block and max CB top (FL) for one polygon."""
-    any_frame = frames[hours[0]]
-    lon_f = any_frame["lon"].ravel()
-    lat_f = any_frame["lat"].ravel()
-    inside = shapely.contains_xy(poly, lon_f, lat_f)
-    present, tops = [], []
+SHIFT_KM = 50      # centroid shift that starts a new period polygon
+MIN_HOURS = 2      # shorter pieces are merged into the neighbouring period
+MIN_PIXELS = 10
+
+
+def _centroid(mask, lat, lon):
+    return float(lat[mask].mean()), float(lon[mask].mean())
+
+
+def _dist_km(a, b):
+    dy = (a[0] - b[0]) * 111.0
+    dx = (a[1] - b[1]) * 111.0 * np.cos(np.radians((a[0] + b[0]) / 2))
+    return float(np.hypot(dx, dy))
+
+
+def track_segments(masks, hours, lat, lon):
+    """
+    Follow each convective zone hour by hour. A zone stays in the same
+    period polygon while it stays in place; once its centroid moves more than
+    SHIFT_KM from where the period started, a new period polygon begins.
+    Returns a list of segments: {"hours": [...], "masks": {hour: bool array}}.
+    """
+    from scipy.ndimage import label, binary_dilation
+    grow = np.ones((7, 7), dtype=bool)          # ~20 km link radius between hours
+    tracks, active = [], []
+
+    def new_seg(h, m):
+        return {"hours": [h], "masks": {h: m}, "c0": _centroid(m, lat, lon)}
+
     for h in hours:
-        fr = frames[h]
-        m = fr["high"] | fr["med"] if key == "MED" else fr["high"]
-        sel = inside & m.ravel()
-        if sel.any():
-            present.append(h)
-            tops.append(float(np.nanmax(fr["htop"].ravel()[sel])))
-    if not present:
-        return None, None
-    win = f"{hh(present[0])}-{hh(present[-1] + timedelta(hours=1), True)}"
-    fl = to_fl(max(tops)) if tops else None
-    return win, fl
+        lab, n = label(masks[h])
+        comps = [lab == i for i in range(1, n + 1)]
+        comps = [c for c in comps if c.sum() >= MIN_PIXELS]
+        reach = [binary_dilation(t["last"], grow) for t in active]
+
+        assigned, fresh = {}, []
+        for c in comps:
+            hit = next((i for i, r in enumerate(reach) if (r & c).any()), None)
+            if hit is None:
+                fresh.append(c)
+            else:                                # merges/splits stay with one track
+                assigned[hit] = assigned[hit] | c if hit in assigned else c
+
+        nxt = []
+        for i, m in assigned.items():
+            t = active[i]
+            seg = t["segs"][-1]
+            if _dist_km(_centroid(m, lat, lon), seg["c0"]) > SHIFT_KM:
+                t["segs"].append(new_seg(h, m))
+            else:
+                seg["hours"].append(h)
+                seg["masks"][h] = m
+            t["last"] = m
+            nxt.append(t)
+        for c in fresh:
+            t = {"segs": [new_seg(h, c)], "last": c}
+            tracks.append(t)
+            nxt.append(t)
+        active = nxt
+
+    out = []
+    for t in tracks:
+        segs = t["segs"]
+        i = 0
+        while len(segs) > 1 and i < len(segs):   # merge too-short pieces
+            if len(segs[i]["hours"]) < MIN_HOURS:
+                j = i - 1 if i > 0 else i + 1
+                segs[j]["hours"] = sorted(segs[j]["hours"] + segs[i]["hours"])
+                segs[j]["masks"].update(segs[i]["masks"])
+                segs.pop(i)
+                i = 0
+            else:
+                i += 1
+        out.extend(segs)
+    return out
+
+
+def segment_info(seg, frames):
+    hrs = sorted(seg["hours"])
+    win = f"{hh(hrs[0])}-{hh(hrs[-1] + timedelta(hours=1), True)}"
+    tops = [float(frames[h]["htop"][m].max()) for h, m in seg["masks"].items() if m.any()]
+    union = np.zeros_like(next(iter(seg["masks"].values())))
+    for m in seg["masks"].values():
+        union |= m
+    return win, (to_fl(max(tops)) if tops else None), union
 
 
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
@@ -119,25 +186,25 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     if hours:
         lat = frames[hours[0]]["lat"]
         lon = frames[hours[0]]["lon"]
-        hi = np.zeros_like(frames[hours[0]]["high"], dtype=bool)
-        md = np.zeros_like(hi)
-        for h in hours:
-            hi |= frames[h]["high"]
-            md |= frames[h]["high"] | frames[h]["med"]
-
-        polys = {"MED": get_polygons(md, lat, lon), "HIGH": get_polygons(hi, lat, lon)}
-        high_union = shapely.union_all(polys["HIGH"]) if polys["HIGH"] else None
+        level_masks = {
+            "MED":  {h: frames[h]["high"] | frames[h]["med"] for h in hours},
+            "HIGH": {h: frames[h]["high"].copy() for h in hours},
+        }
+        polys = {"MED": [], "HIGH": []}
+        for key in ("MED", "HIGH"):
+            for seg in track_segments(level_masks[key], hours, lat, lon):
+                win, fl, union = segment_info(seg, frames)
+                for p in get_polygons(union, lat, lon):
+                    polys[key].append((p, win, fl))
+        high_union = shapely.union_all([p for p, _, _ in polys["HIGH"]]) if polys["HIGH"] else None
 
         for key, z in (("MED", 1), ("HIGH", 2)):
             fill, edge = COLORS[key]
-            for p in polys[key]:
+            for p, win, fl in polys[key]:
                 for g in ([p] if p.geom_type == "Polygon" else list(p.geoms)):
                     x, y = g.exterior.xy
-                    ax.fill(x, y, facecolor=fill, alpha=0.55, edgecolor=edge,
+                    ax.fill(x, y, facecolor=fill, alpha=0.5, edgecolor=edge,
                             linewidth=1.5, transform=proj, zorder=z)
-                win, fl = describe(p, hours, frames, key)
-                if not win:
-                    continue
                 # MED arrow points to the green ring, not into the yellow core
                 anchor = p
                 if key == "MED" and high_union is not None:
@@ -148,12 +215,13 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                                f"{win} / {key} / {fl if fl else '---'}"))
 
     # HIGH labels above the zone, MED labels below
-    for key, p, c, txt in labels:
+    for k, (key, p, c, txt) in enumerate(labels):
         x0, y0, x1, y1 = p.bounds
+        step = 0.22 * (k % 3)                    # stagger neighbouring labels
         if key == "HIGH":
-            tx, ty = c.x + 0.2, min(y1 + 0.35, d["lat_max"] - 0.3)
+            tx, ty = c.x + 0.2, min(y1 + 0.35 + step, d["lat_max"] - 0.3)
         else:
-            tx, ty = c.x - 0.8, max(y0 - 0.45, d["lat_min"] + 0.15)
+            tx, ty = c.x - 0.8, max(y0 - 0.45 - step, d["lat_min"] + 0.15)
         ax.annotate(txt, xy=(c.x, c.y), xytext=(tx, ty), fontsize=9, zorder=6,
                     bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#888888"),
                     arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
