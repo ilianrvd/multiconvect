@@ -1,7 +1,7 @@
 """
 make_sigwx.py
 FIR SIGWX CB product from the hourly MultiConvect masks.
-4 maps x 6 hours. HIGH = yellow, MED = green.
+6-hour maps from the run's block until 24 UTC of the next day. HIGH = yellow, MED = green.
 Label: "HH-HH / HIGH|MED / FLxxx"
 Experimental - not an official product.
 """
@@ -43,10 +43,17 @@ def load_frames(mask_dir):
     return frames
 
 
-def blocks_from(run_time, n=4):
+def blocks_from(run_time, last_valid):
+    """6-hour blocks from the run's block until 24 UTC of the next day."""
     start = run_time.replace(minute=0, second=0, microsecond=0)
     start = start.replace(hour=(start.hour // 6) * 6)
-    return [(start + timedelta(hours=6 * i), start + timedelta(hours=6 * (i + 1))) for i in range(n)]
+    end = run_time.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)
+    blocks = []
+    b0 = start
+    while b0 < end and b0 <= last_valid:
+        blocks.append((b0, b0 + timedelta(hours=6)))
+        b0 += timedelta(hours=6)
+    return blocks
 
 
 def hh(t, is_end=False):
@@ -165,22 +172,25 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
 
 
 def write_page(out_dir, items, run_label):
-    cards = "".join(
-        f'<figure><img src="{f}" alt="{t}"><figcaption>{t}</figcaption></figure>' for f, t in items)
+    days = {}
+    for f, t, day in items:
+        days.setdefault(day, []).append(
+            f'<figure><img src="{f}" alt="{t}"><figcaption>{t}</figcaption></figure>')
+    cards = "".join(f'<h2>{day}</h2><div class="grid">{"".join(c)}</div>' for day, c in days.items())
     html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FIR SIGWX CB</title>
 <style>
 body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1419;color:#e0e0e0;margin:0;padding:16px}}
-h1{{font-size:20px;margin:0 0 4px}} .meta{{color:#7a8899;font-size:13px;margin-bottom:16px}}
+h1{{font-size:20px;margin:0 0 4px}} h2{{font-size:16px;margin:24px 0 10px;color:#8ab4d8}} .meta{{color:#7a8899;font-size:13px;margin-bottom:16px}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px}}
 figure{{margin:0;background:#1a2332;border-radius:10px;overflow:hidden}}
 img{{width:100%;display:block;background:#fff}} figcaption{{padding:8px 12px;font-size:13px;color:#aab}}
 a{{color:#8ab4d8}}
 </style></head><body>
 <h1>FIR SIGWX CB &mdash; experimental</h1>
-<div class="meta">Run {run_label} &middot; 4 x 6 h &middot; HIGH = 3 models, MED = ICON + 1 &middot; <a href="../">hourly maps</a></div>
-<div class="grid">{cards}</div></body></html>"""
+<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; HIGH = 3 models, MED = ICON + 1 &middot; <a href="../">hourly maps</a></div>
+{cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
 
@@ -196,10 +206,10 @@ def main():
     for old in out_dir.glob("sigwx_*.png"):
         old.unlink()
     items = []
-    for i, (b0, b1) in enumerate(blocks_from(run_time), 1):
+    for i, (b0, b1) in enumerate(blocks_from(run_time, max(frames)), 1):
         name = f"sigwx_{i}.png"
         plot_block(frames, b0, b1, cfg, out_dir / name, run_label)
-        items.append((name, f"{hh(b0)}-{hh(b1, True)} UTC {b0:%d.%m}"))
+        items.append((name, f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}"))
     write_page(out_dir, items, run_label)
 
 
