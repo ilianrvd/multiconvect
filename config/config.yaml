@@ -25,6 +25,11 @@ models:
 
 expand_pixels: 3
 
+sigwx:
+  act_lpi: 25
+  ocnl: 0.40
+  frq: 0.70
+
 viz:
   dpi: 150
   figsize: [14, 10]

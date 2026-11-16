@@ -35,8 +35,10 @@ COLORS = {
     "yellow":      ("#F2E04A", "#B8A000"),
     "orange":      ("#F59E2E", "#C06A00"),
 }
-COV_OCNL = 0.25    # active share of the zone -> OCNL
-COV_FRQ = 0.50     # -> FRQ
+# Density settings - overridden from config.yaml (section "sigwx")
+COV_OCNL = 0.40    # mean share of active cells in a ~50 km window -> OCNL
+COV_FRQ = 0.70     # -> FRQ
+ACT_LPI = 25.0     # active cell: ICON LPI >= this AND GFS or IFS signal
 
 
 def coverage_class(cov):
@@ -66,7 +68,10 @@ def load_frames(mask_dir):
         frames[valid] = {k: d[k] for k in ("high", "med", "lat", "lon", "htop")}
         # older files: no LOW mask / active cells
         frames[valid]["low"] = d["low"] if "low" in d.files else np.zeros_like(d["high"])
-        frames[valid]["act"] = d["act"] if "act" in d.files else d["high"]
+        if "lpi" in d.files and "other" in d.files:
+            frames[valid]["act"] = (d["lpi"].astype(np.float32) >= ACT_LPI) & d["other"]
+        else:
+            frames[valid]["act"] = d["act"] if "act" in d.files else d["high"]
         frames[valid]["run"] = str(d["run"])
     return frames
 
@@ -196,7 +201,7 @@ def segment_info(seg, frames):
     win = f"{hh(hrs[0])}-{hh(hrs[-1] + timedelta(hours=1), True)}"
     union = np.zeros_like(next(iter(seg["masks"].values())))
     dens = np.zeros(union.shape, dtype=np.float32)
-    tops = []
+    tops, n = [], 0
     for h, m in seg["masks"].items():
         if not m.any():
             continue
@@ -204,7 +209,9 @@ def segment_info(seg, frames):
         v = frames[h]["htop"][m]
         tops.extend(v[v > 0].tolist())
         act = (frames[h]["act"] & m).astype(np.float32)
-        dens = np.maximum(dens, uniform_filter(act, size=DENS_WIN, mode="constant"))
+        dens += uniform_filter(act, size=DENS_WIN, mode="constant")
+        n += 1
+    dens /= max(n, 1)                              # mean over the period, not the worst hour
     return win, _top(tops), union, np.where(union, dens, 0.0)
 
 
@@ -291,7 +298,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     share = float(sub.sum()) / max(n, 1)
                     parts.append(f"{cls}={share:.0%}")
                     col = colour_for(key, cls)
-                    for q in get_polygons(sub, lat, lon, min_pixels=6):
+                    for q in get_polygons(sub, lat, lon, min_distance_deg=0.1, min_pixels=6):
                         q = q.intersection(zone)
                         if not q.is_empty and q.area > 0:
                             dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3))
@@ -394,7 +401,13 @@ a{{color:#8ab4d8}}
 
 
 def main():
+    global COV_OCNL, COV_FRQ, ACT_LPI
     cfg = yaml.safe_load(open("config/config.yaml", encoding="utf-8"))
+    sw = cfg.get("sigwx", {})
+    COV_OCNL = sw.get("ocnl", COV_OCNL)
+    COV_FRQ = sw.get("frq", COV_FRQ)
+    ACT_LPI = sw.get("act_lpi", ACT_LPI)
+    logger.info(f"SIGWX density: active = LPI>={ACT_LPI} + GFS/IFS, OCNL>={COV_OCNL:.0%}, FRQ>={COV_FRQ:.0%}")
     frames = load_frames(Path(cfg["paths"]["data"]) / "masks")
     if not frames:
         raise SystemExit("No masks in data/masks - run run.py first")
