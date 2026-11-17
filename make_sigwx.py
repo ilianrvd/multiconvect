@@ -293,6 +293,28 @@ def poly_info(p, masks, hours, frames, lat, lon):
     return win, _top(tops)
 
 
+def dense_info(p, masks, hours, frames, lat, lon, share):
+    """Window and FL of an OCNL/FRQ part: only the hours in which active cells
+    cover at least `share` of the part (else the single densest hour)."""
+    inside = shapely.contains_xy(p, lon.ravel(), lat.ravel()).reshape(lat.shape)
+    n = int(inside.sum())
+    if n == 0:
+        return None, None
+    cov = {h: float((masks[h] & inside).sum()) / n for h in hours}
+    present = [h for h in hours if cov[h] >= share]
+    if not present:
+        best = max(hours, key=lambda h: cov[h])
+        if cov[best] == 0:
+            return None, None
+        present = [best]
+    tops = []
+    for h in present:
+        v = frames[h]["htop"][masks[h] & inside]
+        tops.extend(v[v > 0].tolist())
+    win = f"{hh(present[0])}-{hh(present[-1] + timedelta(hours=1), True)}"
+    return win, _top(tops)
+
+
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -421,7 +443,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                       [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
                 if _area_km2(g) < MIN_DENSE_KM2:
                     continue
-                win, fl = poly_info(g, act_masks, hours, frames, lat, lon)
+                win, fl = dense_info(g, act_masks, hours, frames, lat, lon,
+                                     COV_FRQ if col == "orange" else COV_OCNL)
                 if not win:
                     continue
                 if col == "yellow" and any(g.intersects(o) for o in labelled_frq):
