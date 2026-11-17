@@ -102,10 +102,14 @@ def run(cfg, run_date, run_hour, fxx):
     from scipy.ndimage import binary_dilation
     e = cfg.get("expand_pixels", 3)
     icon_exp = binary_dilation(icon >= thr["icon"]["threshold"], structure=np.ones((2*e+1, 2*e+1), bool))
-    n_models = (icon_exp.astype(np.int8) + (gfs_r >= thr["gfs"]["threshold"])
-                + (ifs_r >= thr["ifs"]["threshold"]))
+    gfs_s = gfs_r >= thr["gfs"]["threshold"]
+    ifs_s = ifs_r >= thr["ifs"]["threshold"]
+    # HIGH: ICON (only lightning-related field) + GFS or IFS
+    # MED:  ICON alone, or GFS + IFS convective precip without ICON (single GFS/IFS = TCU/SHRA, not shown)
+    sig2 = icon_exp & (gfs_s | ifs_s)
+    sig1 = sig2 | icon_exp | (gfs_s & ifs_s)
     np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
-                        low=low_mask, act=act, sig1=n_models >= 1, sig2=n_models >= 2, other=other, lpi=icon.astype(np.float16),
+                        low=low_mask, act=act, sig1=sig1, sig2=sig2, other=other, lpi=icon.astype(np.float16),
                         lat=lat_icon, lon=lon_icon, htop=htop,
                         valid=valid_dt.isoformat(),
                         run=f"{run_date[8:10]}.{run_date[5:7]} {run_hour:02d}z")

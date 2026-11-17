@@ -2,7 +2,7 @@
 make_sigwx.py
 FIR SIGWX CB product from the hourly MultiConvect masks.
 6-hour maps from the run's block until 24 UTC of the next day.
-MED = 1 model (light green), HIGH = 2-3 models (dark green), OCNL yellow, FRQ orange.
+MED = ICON alone or GFS+IFS (light green), HIGH = ICON + GFS/IFS (dark green), OCNL yellow, FRQ orange.
 Label: "HH-HH / HIGH|MED / FLxxx". A moving or spreading zone is split into
 consecutive period polygons (overlap < 50 % with the start area, 50 km shift,
 or 3 h if the zone changes; min 2 h).
@@ -26,8 +26,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datef
 logger = logging.getLogger(__name__)
 
 # Colour (fill, edge)
-#   MED ISOL  (1 model with a convective signal)   -> light green
-#   HIGH ISOL (2-3 models)                         -> dark green
+#   MED ISOL  (ICON alone, or GFS+IFS without ICON) -> light green
+#   HIGH ISOL (ICON + GFS or IFS)                   -> dark green
 #   OCNL (density of model-agreement cells)        -> yellow
 #   FRQ                                            -> orange
 COLORS = {
@@ -501,8 +501,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         mpatches.Patch(facecolor=COLORS[c][0], edgecolor=COLORS[c][1], label=t) for c, t in (
             ("orange", "FRQ"),
             ("yellow", "OCNL"),
-            ("dark_green", "HIGH ISOL (2-3 models)"),
-            ("light_green", "MED ISOL (1 model)"),
+            ("dark_green", "HIGH ISOL (ICON + GFS/IFS)"),
+            ("light_green", "MED ISOL (ICON or GFS+IFS)"),
         )
     ], loc="upper center", bbox_to_anchor=(0.5, -0.01), ncol=4, fontsize=9, frameon=False)
 
@@ -531,7 +531,7 @@ img{{width:100%;display:block;background:#fff}} figcaption{{padding:8px 12px;fon
 a{{color:#8ab4d8}}
 </style></head><body>
 <h1>FIR SIGWX CB &mdash; experimental</h1>
-<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = 1 model, dark green = 2-3 models, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a></div>
+<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = ICON alone or GFS+IFS, dark green = ICON + GFS/IFS, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a></div>
 {cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
