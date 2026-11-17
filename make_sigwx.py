@@ -115,7 +115,9 @@ MIN_MED_KM2 = 2000  # smaller MED zones are dropped
 INSIDE_SHARE = 0.5  # same-level polygons overlapping at least this share (of the smaller) are merged
 NEST_SHARE = 0.8   # ...or merged regardless of time when this share lies inside
 MAX_MED_LABELS = 5
-MIN_DENSE_KM2 = 500   # OCNL/FRQ parts at least this big get their own label  # label cap for MED zones (largest first); HIGH always labelled
+MIN_DENSE_KM2 = 200   # smaller OCNL/FRQ parts are not drawn; every drawn part gets its own label
+MIN_FRQ_KM2 = 1500    # smaller FRQ cores are shown as OCNL (yellow)
+TOUCH_DEG = 0.15      # same-level zones closer than this (~15 km) with overlapping hours are merged
 
 
 def _merge_win(a, b):
@@ -402,7 +404,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                         share = a[0].intersection(b[0]).area / small
                         # same place at the same time, or one almost entirely inside the other;
                         # consecutive periods of a moving zone stay separate
-                        if (share >= INSIDE_SHARE and _win_overlap(a[1], b[1])) or share >= NEST_SHARE:
+                        # touching (or overlapping) zones active at the same time, or one almost
+                        # entirely inside the other; consecutive periods of a moving zone stay separate
+                        if ((_win_overlap(a[1], b[1]) and a[0].distance(b[0]) <= TOUCH_DEG)
+                                or share >= NEST_SHARE):
                             a[0] = a[0].union(b[0])
                             a[1] = _merge_win(a[1], b[1])
                             a[2] = max([x for x in (a[2], b[2]) if x] or [None])
@@ -430,7 +435,21 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         for q, col, z in dense:
             merged.setdefault(col, []).append(q)
             zs[col] = max(zs.get(col, 0), z)
-        dense = [(shapely.union_all(v), col, zs[col]) for col, v in merged.items()]
+        # small FRQ cores -> OCNL; tiny parts dropped (so every drawn part can carry a label)
+        def _parts(geom):
+            return [x for x in ([geom] if geom.geom_type == "Polygon" else getattr(geom, "geoms", []))
+                    if x.geom_type == "Polygon"]
+        if "orange" in merged:
+            keep = []
+            for g in _parts(shapely.union_all(merged["orange"])):
+                (keep if _area_km2(g) >= MIN_FRQ_KM2 else merged.setdefault("yellow", [])).append(g)
+                zs.setdefault("yellow", 3)
+            merged["orange"] = keep
+        dense = []
+        for col, v in merged.items():
+            parts = [g for g in _parts(shapely.union_all(v)) if _area_km2(g) >= MIN_DENSE_KM2] if v else []
+            if parts:
+                dense.append((shapely.union_all(parts), col, zs[col]))
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
