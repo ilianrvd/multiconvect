@@ -114,7 +114,8 @@ MIN_PIXELS = 10
 MIN_MED_KM2 = 2000  # smaller MED zones are dropped
 INSIDE_SHARE = 0.5  # same-level polygons overlapping at least this share (of the smaller) are merged
 NEST_SHARE = 0.8   # ...or merged regardless of time when this share lies inside
-MAX_MED_LABELS = 5  # label cap for MED zones (largest first); HIGH always labelled
+MAX_MED_LABELS = 5
+MIN_DENSE_KM2 = 500   # OCNL/FRQ parts at least this big get their own label  # label cap for MED zones (largest first); HIGH always labelled
 
 
 def _merge_win(a, b):
@@ -412,6 +413,26 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
 
+        # own labels for OCNL / FRQ parts: hours and FL of the dense part itself
+        act_masks = {h: frames[h]["act"] for h in hours}
+        labelled_frq = []
+        for q, col, z in sorted(dense, key=lambda t: -t[2]):      # orange first
+            for g in ([q] if q.geom_type == "Polygon" else
+                      [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
+                if _area_km2(g) < MIN_DENSE_KM2:
+                    continue
+                win, fl = poly_info(g, act_masks, hours, frames, lat, lon)
+                if not win:
+                    continue
+                if col == "yellow" and any(g.intersects(o) for o in labelled_frq):
+                    continue                     # yellow ring around a labelled orange core
+                if col == "orange":
+                    labelled_frq.append(g)
+                hu = unions["HIGH"]
+                lvl = "HIGH" if hu is not None and g.intersection(hu).area >= 0.5 * g.area else "MED"
+                labels.append(("DENSE", g, g.representative_point(),
+                               f"{win} / {lvl} / {fl if fl else '---'}"))
+
         for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
             for p, win, fl, col in polys[key]:
                 fill, edge = COLORS[col]
@@ -429,6 +450,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                         continue                 # LOW hidden under MED - no label
                     if not ring.is_empty:
                         anchor = ring
+                if dense:                                # and not into a yellow/orange part
+                    rest = anchor.difference(shapely.union_all([t[0] for t in dense]))
+                    if not rest.is_empty and rest.area > 0.05 * anchor.area:
+                        anchor = rest
                 labels.append((key, p, anchor.representative_point(),
                                f"{win} / {key} / {fl if fl else '---'}"))
 
@@ -456,15 +481,16 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
 
     high_l = [t for t in labels if t[0] == "HIGH"]
     med_l = sorted([t for t in labels if t[0] == "MED"], key=lambda t: -t[1].area)[:MAX_MED_LABELS]
-    labels = high_l + med_l
+    dense_l = [t for t in labels if t[0] == "DENSE"]
+    labels = dense_l + high_l + med_l
     for k, (key, p, c, txt) in enumerate(labels):
         x0, y0, x1, y1 = p.bounds
         if key == "HIGH":
             tx, ty = free_spot(c.x + 0.2, y1 + 0.3, txt, +1)
         elif key == "MED":
             tx, ty = free_spot(c.x - 0.8, y0 - 0.5, txt, -1)
-        else:                                    # LOW: to the left of the zone
-            tx, ty = free_spot(max(x0 - 1.6, d["lon_min"] + 0.1), c.y, txt, +1)
+        else:                                    # OCNL / FRQ part: to the right
+            tx, ty = free_spot(min(x1 + 0.4, d["lon_max"] - 2.0), c.y + 0.1, txt, +1)
         ax.annotate(txt, xy=(c.x, c.y), xytext=(tx, ty), fontsize=9, zorder=6,
                     bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#888888"),
                     arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
