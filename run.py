@@ -106,7 +106,9 @@ def run(cfg, run_date, run_hour, fxx):
     ifs_s = ifs_r >= thr["ifs"]["threshold"]
     # HIGH: ICON (only lightning-related field) + GFS or IFS
     # MED:  ICON alone, or GFS + IFS convective precip without ICON (single GFS/IFS = TCU/SHRA, not shown)
-    sig2 = icon_exp & (gfs_s | ifs_s)
+    high_lpi = cfg.get("sigwx", {}).get("high_lpi", 20)
+    icon_hi = binary_dilation(icon >= high_lpi, structure=np.ones((2*e+1, 2*e+1), bool))
+    sig2 = icon_hi & (gfs_s | ifs_s)          # HIGH: ICON LPI >= high_lpi (weak LPI = TCU/SHRA)
     sig1 = sig2 | icon_exp | (gfs_s & ifs_s)
     np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
                         low=low_mask, act=act, sig1=sig1, sig2=sig2, other=other, lpi=icon.astype(np.float16),

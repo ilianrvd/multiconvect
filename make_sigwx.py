@@ -501,7 +501,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         mpatches.Patch(facecolor=COLORS[c][0], edgecolor=COLORS[c][1], label=t) for c, t in (
             ("orange", "FRQ"),
             ("yellow", "OCNL"),
-            ("dark_green", "HIGH ISOL (ICON + GFS/IFS)"),
+            ("dark_green", "HIGH ISOL (ICON LPI>=20 + GFS/IFS)"),
             ("light_green", "MED ISOL (ICON or GFS+IFS)"),
         )
     ], loc="upper center", bbox_to_anchor=(0.5, -0.01), ncol=4, fontsize=9, frameon=False)
