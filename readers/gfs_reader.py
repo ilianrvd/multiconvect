@@ -5,25 +5,28 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def read_gfs_refc(path: Path, domain: dict) -> tuple:
+def read_gfs_cprat(path, domain: dict, like=None) -> tuple:
+    """CPRAT in mm/h. path None (F000) -> zeros on the GFS grid of `like` (a previous read)."""
     import cfgrib
-    datasets = cfgrib.open_datasets(str(path))
-    for ds in datasets:
+    if path is None:
+        if like is None:
+            raise RuntimeError("[GFS] no CPRAT at F000 and no grid to copy")
+        _, lat, lon = like
+        return np.zeros_like(lat, dtype=np.float32), lat, lon
+    for ds in cfgrib.open_datasets(str(path)):
         for var in ds.data_vars:
             vals = ds[var].values.astype(np.float32)
-            valid = vals[~np.isnan(vals)]
-            if len(valid) == 0:
+            if vals.ndim != 2:
                 continue
-            if -30 <= valid.max() <= 80:
-                lat = ds["latitude"].values
-                lon = ds["longitude"].values
-                if lat.ndim == 1:
-                    lon, lat = np.meshgrid(lon, lat)
-                vals, lat, lon = _crop(vals, lat, lon, domain)
-                logger.info(f"[GFS] REFC: min={np.nanmin(vals):.1f} max={np.nanmax(vals):.1f} dBZ")
-                return vals, lat, lon
-
-    raise RuntimeError("[GFS] REFC not found in file")
+            lat = ds["latitude"].values
+            lon = ds["longitude"].values
+            if lat.ndim == 1:
+                lon, lat = np.meshgrid(lon, lat)
+            vals = np.where(np.isfinite(vals) & (vals > 0), vals * 3600.0, 0.0)  # kg m-2 s-1 -> mm/h
+            vals, lat, lon = _crop(vals, lat, lon, domain)
+            logger.info(f"[GFS] CPRAT: max={vals.max():.2f} mm/h")
+            return vals, lat, lon
+    raise RuntimeError("[GFS] CPRAT not found in file")
 
 
 def _crop(vals, lat, lon, d):

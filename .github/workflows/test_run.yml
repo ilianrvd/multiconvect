@@ -1,0 +1,44 @@
+name: Test run (not published)
+
+on:
+  workflow_dispatch:
+    inputs:
+      date: {description: "Run date YYYY-MM-DD", required: true}
+      hour: {description: "Run hour", required: true, default: "18"}
+      fmax: {description: "Last forecast hour", required: true, default: "30"}
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: mc
+          create-args: >-
+            python=3.11 xarray cfgrib eccodes scipy numpy matplotlib=3.9
+            cartopy shapely pyyaml requests
+
+      - name: Run
+        shell: bash -l {0}
+        run: |
+          pip install herbie-data
+          mkdir -p logs
+          python run.py --date ${{ inputs.date }} --run ${{ inputs.hour }} --fmax ${{ inputs.fmax }}
+          python make_sigwx.py 2>&1 | tee logs/sigwx.log
+
+      - name: Publish to branch "test"
+        run: |
+          mkdir -p out && cp -r docs/sigwx out/ && cp logs/*.log out/
+          mkdir -p out/maps && cp docs/maps/*.png out/maps/ || true
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout --orphan test
+          git rm -rf --cached . > /dev/null
+          git add -f out/
+          git commit -m "Test run ${{ inputs.date }} ${{ inputs.hour }}z"
+          git push -f origin test

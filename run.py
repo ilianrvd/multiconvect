@@ -1,4 +1,5 @@
 import argparse
+import copy
 import logging
 import sys
 from datetime import datetime, timezone, timedelta
@@ -26,11 +27,11 @@ def load_cfg(path):
 
 def run(cfg, run_date, run_hour, fxx):
     from downloaders.icon_downloader import download_icon_lpi
-    from downloaders.gfs_downloader  import download_gfs_refc
-    from downloaders.ifs_downloader  import download_ifs_mucape
-    from readers.gfs_reader  import read_gfs_refc
+    from downloaders.gfs_downloader  import download_gfs_cprat
+    from downloaders.ifs_downloader  import download_ifs_precip
+    from readers.gfs_reader  import read_gfs_cprat
     from readers.icon_reader import read_icon_lpi
-    from readers.ifs_reader  import read_ifs_mucape
+    from readers.ifs_reader  import read_ifs_precip
     from classifier import classify, get_polygons, regrid
     from plot_map   import plot_map
 
@@ -40,18 +41,27 @@ def run(cfg, run_date, run_hour, fxx):
     logger.info(f"Run: {run_date} {run_hour:02d}z  F{fxx:03d}")
 
     logger.info("[1/4] Downloading ...")
-    gfs_file  = download_gfs_refc(run_date, run_hour, fxx, data_dir / "gfs")
+    gfs_file  = download_gfs_cprat(run_date, run_hour, fxx, data_dir / "gfs")
     icon_file = download_icon_lpi(run_date, run_hour, fxx, data_dir / "icon")
-    ifs_file  = download_ifs_mucape(run_date, run_hour, fxx, data_dir / "ifs")
+    ifs_file  = download_ifs_precip(run_date, run_hour, fxx, data_dir / "ifs")
 
     logger.info("[2/4] Reading ...")
-    gfs,  lat_gfs,  lon_gfs  = read_gfs_refc(gfs_file,  cfg["domain"])
     icon, lat_icon, lon_icon = read_icon_lpi(icon_file, cfg["domain"])
-    ifs,  lat_ifs,  lon_ifs  = read_ifs_mucape(ifs_file, cfg["domain"])
+    ifs,  lat_ifs,  lon_ifs, ifs_field = read_ifs_precip(ifs_file, cfg["domain"])
 
     logger.info("[3/4] Regridding ...")
-    gfs_r = regrid(gfs, lat_gfs, lon_gfs, lat_icon, lon_icon)
+    if gfs_file is None:                       # F000: no CPRAT in GFS
+        gfs_r = np.zeros_like(icon)
+    else:
+        gfs, lat_gfs, lon_gfs = read_gfs_cprat(gfs_file, cfg["domain"])
+        gfs_r = regrid(gfs, lat_gfs, lon_gfs, lat_icon, lon_icon)
     ifs_r = regrid(ifs, lat_ifs, lon_ifs, lat_icon, lon_icon)
+
+    # total precip (fallback) needs a higher threshold than convective precip
+    cfg = copy.deepcopy(cfg)
+    if ifs_field == "tp":
+        cfg["models"]["ifs"]["threshold"] = cfg["models"]["ifs"].get("tp_threshold", 1.0)
+        logger.warning("[IFS] cp not available - using tp")
 
     high_mask, med_mask, low_mask = classify(gfs_r, icon, ifs_r, lat_icon, lon_icon, cfg)
 
@@ -88,8 +98,14 @@ def run(cfg, run_date, run_hour, fxx):
     thr = cfg["models"]
     other = (gfs_r >= thr["gfs"]["threshold"]) | (ifs_r >= thr["ifs"]["threshold"])
     act = (icon >= thr["icon"]["threshold"]) & other
+    # SIGWX levels: number of models with a convective signal (ICON widened as in classify)
+    from scipy.ndimage import binary_dilation
+    e = cfg.get("expand_pixels", 3)
+    icon_exp = binary_dilation(icon >= thr["icon"]["threshold"], structure=np.ones((2*e+1, 2*e+1), bool))
+    n_models = (icon_exp.astype(np.int8) + (gfs_r >= thr["gfs"]["threshold"])
+                + (ifs_r >= thr["ifs"]["threshold"]))
     np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
-                        low=low_mask, act=act, other=other, lpi=icon.astype(np.float16),
+                        low=low_mask, act=act, sig1=n_models >= 1, sig2=n_models >= 2, other=other, lpi=icon.astype(np.float16),
                         lat=lat_icon, lon=lon_icon, htop=htop,
                         valid=valid_dt.isoformat(),
                         run=f"{run_date[8:10]}.{run_date[5:7]} {run_hour:02d}z")

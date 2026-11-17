@@ -1,7 +1,8 @@
 """
 make_sigwx.py
 FIR SIGWX CB product from the hourly MultiConvect masks.
-6-hour maps from the run's block until 24 UTC of the next day. HIGH = yellow, MED = green.
+6-hour maps from the run's block until 24 UTC of the next day.
+MED = 1 model (light green), HIGH = 2-3 models (dark green), OCNL yellow, FRQ orange.
 Label: "HH-HH / HIGH|MED / FLxxx". A moving or spreading zone is split into
 consecutive period polygons (overlap < 50 % with the start area, 50 km shift,
 or 3 h if the zone changes; min 2 h).
@@ -24,11 +25,11 @@ from classifier import get_polygons
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
-# Colour = risk x density (fill, edge)
-#   LOW (any)            -> light green
-#   MED ISOL             -> dark green
-#   HIGH ISOL / MED OCNL -> yellow
-#   HIGH OCNL / FRQ      -> orange
+# Colour (fill, edge)
+#   MED ISOL  (1 model with a convective signal)   -> light green
+#   HIGH ISOL (2-3 models)                         -> dark green
+#   OCNL (density of model-agreement cells)        -> yellow
+#   FRQ                                            -> orange
 COLORS = {
     "light_green": ("#C5E3A6", "#7BA85A"),
     "dark_green":  ("#5FA35C", "#2F7A2C"),
@@ -46,11 +47,11 @@ def coverage_class(cov):
 
 
 def colour_for(level, cov_class):
-    if level == "LOW":
-        return "light_green"
-    if level == "MED":
-        return {"ISOL": "dark_green", "OCNL": "yellow"}.get(cov_class, "orange")
-    return "yellow" if cov_class == "ISOL" else "orange"
+    if cov_class == "FRQ":
+        return "orange"
+    if cov_class == "OCNL":
+        return "yellow"
+    return "light_green" if level == "MED" else "dark_green"
 
 
 AIRPORTS = {
@@ -74,6 +75,9 @@ def load_frames(mask_dir):
             frames[valid]["act"] = (frames[valid]["lpi"] >= ACT_LPI) & d["other"]
         else:
             frames[valid]["act"] = d["act"] if "act" in d.files else d["high"]
+        # SIGWX levels by number of models (older masks: old HIGH/MED definitions)
+        frames[valid]["sig1"] = d["sig1"] if "sig1" in d.files else d["high"] | d["med"]
+        frames[valid]["sig2"] = d["sig2"] if "sig2" in d.files else d["high"]
         frames[valid]["run"] = str(d["run"])
     return frames
 
@@ -321,26 +325,16 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         lat = frames[hours[0]]["lat"]
         lon = frames[hours[0]]["lon"]
         level_masks = {
-            "LOW":  {h: frames[h]["low"] | frames[h]["med"] | frames[h]["high"] for h in hours},
-            "MED":  {h: frames[h]["high"] | frames[h]["med"] for h in hours},
-            "HIGH": {h: frames[h]["high"].copy() for h in hours},
+            "MED":  {h: frames[h]["sig1"] | frames[h]["sig2"] for h in hours},
+            "HIGH": {h: frames[h]["sig2"].copy() for h in hours},
         }
         polys = {"LOW": [], "MED": [], "HIGH": []}   # (polygon, window, FL, colour)
 
-        # LOW: one 6-hour polygon, not tracked, always light green
-        low_union = np.zeros_like(lat, dtype=bool)
-        for h in hours:
-            low_union |= level_masks["LOW"][h]
-        for p in get_polygons(low_union, lat, lon):
-            if _area_km2(p) < MIN_MED_KM2:
-                continue
-            win, fl = poly_info(p, level_masks["LOW"], hours, frames, lat, lon)
-            if win and _win_hours(win) >= MIN_HOURS:
-                polys["LOW"].append((p, win, fl, "light_green"))
+        # LOW (ISOL) is not shown any more
 
         # MED / HIGH: tracked periods. Base zone in the ISOL colour, dense parts on top
         dense = []                                   # (polygon, colour) - no labels
-        base_col = {"MED": "dark_green", "HIGH": "yellow"}
+        base_col = {"MED": "light_green", "HIGH": "dark_green"}
         for key in ("MED", "HIGH"):
             for seg in track_segments(level_masks[key], hours, lat, lon):
                 if key == "MED" and len(seg["hours"]) < MIN_HOURS:   # short-lived MED zone
@@ -479,10 +473,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                  f"{b0:%d.%m.%Y}   |   RUN {run_label}", fontsize=11)
     ax.legend(handles=[
         mpatches.Patch(facecolor=COLORS[c][0], edgecolor=COLORS[c][1], label=t) for c, t in (
-            ("orange", "HIGH OCNL/FRQ, MED FRQ"),
-            ("yellow", "HIGH ISOL, MED OCNL"),
-            ("dark_green", "MED ISOL"),
-            ("light_green", "LOW"),
+            ("orange", "FRQ"),
+            ("yellow", "OCNL"),
+            ("dark_green", "HIGH ISOL (2-3 models)"),
+            ("light_green", "MED ISOL (1 model)"),
         )
     ], loc="upper center", bbox_to_anchor=(0.5, -0.01), ncol=4, fontsize=9, frameon=False)
 
@@ -511,7 +505,7 @@ img{{width:100%;display:block;background:#fff}} figcaption{{padding:8px 12px;fon
 a{{color:#8ab4d8}}
 </style></head><body>
 <h1>FIR SIGWX CB &mdash; experimental</h1>
-<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; colour = risk (LOW/MED/HIGH) x density (ISOL/OCNL/FRQ) &middot; <a href="../">hourly maps</a></div>
+<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = 1 model, dark green = 2-3 models, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a></div>
 {cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 

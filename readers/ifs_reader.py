@@ -1,44 +1,40 @@
 import logging
-from pathlib import Path
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-def _read_single(path, domain):
+def _read_single(path):
+    """Accumulated precipitation in m. Prefers convective (cp), falls back to total (tp)."""
     import cfgrib
-    datasets = cfgrib.open_datasets(str(path))
-    for ds in datasets:
-        if "mucape" in ds.data_vars:
-            vals = ds["mucape"].values.astype(np.float32)
-            lat = ds["latitude"].values
-            lon = ds["longitude"].values
-            if lat.ndim == 1:
-                lon, lat = np.meshgrid(lon, lat)
-            vals = np.where(vals < 0, 0.0, vals)
-            return vals, lat, lon
-    raise RuntimeError(f"[IFS] mucape not found in {path}")
+    found = {}
+    for ds in cfgrib.open_datasets(str(path)):
+        for name in ("cp", "tp"):
+            if name in ds.data_vars and name not in found:
+                lat = ds["latitude"].values
+                lon = ds["longitude"].values
+                if lat.ndim == 1:
+                    lon, lat = np.meshgrid(lon, lat)
+                found[name] = (ds[name].values.astype(np.float32), lat, lon)
+    for name in ("cp", "tp"):
+        if name in found:
+            return (*found[name], name)
+    raise RuntimeError(f"[IFS] neither cp nor tp in {path}")
 
 
-def read_ifs_mucape(paths, domain):
-    """
-    paths е tuple (path_lo, path_hi, weight_hi) от downloader-а.
-    Ако path_hi е None - директно четене. Иначе - интерполация.
-    """
-    path_lo, path_hi, w_hi = paths
-
-    vals_lo, lat, lon = _read_single(path_lo, domain)
-
-    if path_hi is not None:
-        vals_hi, _, _ = _read_single(path_hi, domain)
-        vals = (1.0 - w_hi) * vals_lo + w_hi * vals_hi
-        logger.info(f"[IFS] MUCAPE (interp w={w_hi:.2f}): max={np.nanmax(vals):.1f} J/kg")
-    else:
-        vals = vals_lo
-        logger.info(f"[IFS] MUCAPE: max={np.nanmax(vals):.1f} J/kg")
-
+def read_ifs_precip(paths, domain):
+    """Mean rate (mm/h) over the 3-hour window. Returns vals, lat, lon, field ('cp' or 'tp')."""
+    path_lo, path_hi = paths
+    hi, lat, lon, name = _read_single(path_hi)
+    lo = np.zeros_like(hi)
+    if path_lo is not None:
+        lo, _, _, name_lo = _read_single(path_lo)
+        if name_lo != name:
+            raise RuntimeError(f"[IFS] field mismatch {name_lo}/{name}")
+    vals = np.clip(np.nan_to_num(hi - lo), 0, None) * 1000.0 / 3.0
     vals, lat, lon = _crop(vals, lat, lon, domain)
-    return vals, lat, lon
+    logger.info(f"[IFS] {name.upper()} rate (3h mean): max={vals.max():.2f} mm/h")
+    return vals, lat, lon, name
 
 
 def _crop(vals, lat, lon, d):

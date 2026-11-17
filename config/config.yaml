@@ -12,16 +12,17 @@ domain:
 models:
   gfs:
     enabled: true
-    field: "REFC"
-    threshold: 20
+    field: "CPRAT"        # convective precip rate, mm/h
+    threshold: 0.5
   icon:
     enabled: true
     field: "LPI_CON_MAX"
     threshold: 10
   ifs:
     enabled: true
-    field: "mucape"
-    threshold: 500
+    field: "cp"           # convective precip, 3h mean rate mm/h (tp fallback)
+    threshold: 0.5
+    tp_threshold: 1.0
 
 expand_pixels: 3
 
