@@ -236,8 +236,14 @@ def track_segments(masks, hours, lat, lon):
 DENS_WIN = 7        # ~50 km window on the ICON grid (0.0625 deg)
 
 
+MIN_CB_FL = 100   # lower "tops" are shallow showers, not CB - shown as ---
+
+
 def _top(values):
-    return to_fl(float(np.percentile(values, 90))) if len(values) else None
+    if not len(values):
+        return None
+    fl = to_fl(float(np.percentile(values, 90)))
+    return fl if fl and fl >= MIN_CB_FL else None
 
 
 def segment_info(seg, frames):
