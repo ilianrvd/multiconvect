@@ -111,7 +111,7 @@ def run(cfg, run_date, run_hour, fxx):
     sig2 = icon_hi & (gfs_s | ifs_s)          # HIGH: ICON LPI >= high_lpi (weak LPI = TCU/SHRA)
     sig1 = sig2 | icon_exp | (gfs_s & ifs_s)
     np.savez_compressed(mask_dir / f"f{fxx:03d}.npz", high=high_mask, med=med_mask,
-                        low=low_mask, act=act, sig1=sig1, sig2=sig2, other=other, lpi=icon.astype(np.float16),
+                        low=low_mask, act=act, sig1=sig1, sig2=sig2, other=other, gfs_s=gfs_s, ifs_s=ifs_s, lpi=icon.astype(np.float16),
                         lat=lat_icon, lon=lon_icon, htop=htop,
                         valid=valid_dt.isoformat(),
                         run=f"{run_date[8:10]}.{run_date[5:7]} {run_hour:02d}z")
