@@ -78,8 +78,29 @@ def load_frames(mask_dir):
         # SIGWX levels by number of models (older masks: old HIGH/MED definitions)
         frames[valid]["sig1"] = d["sig1"] if "sig1" in d.files else d["high"] | d["med"]
         frames[valid]["sig2"] = d["sig2"] if "sig2" in d.files else d["high"]
+        # all three models (graded levels): ICON + GFS + IFS
+        if "gfs_s" in d.files and "ifs_s" in d.files:
+            frames[valid]["all3"] = d["gfs_s"] & d["ifs_s"]
         frames[valid]["run"] = str(d["run"])
     return frames
+
+
+GRADED = False   # sigwx.graded: label level HIGH = ICON + GFS + IFS, MED = ICON + one of them
+
+
+def graded_level(geom, masks, hours, frames, lat, lon, default):
+    """HIGH if in most of the signal cells inside `geom` both GFS and IFS agree, else MED."""
+    if not GRADED or "all3" not in frames[hours[0]]:
+        return default
+    inside = shapely.contains_xy(geom, lon.ravel(), lat.ravel()).reshape(lat.shape)
+    n = a3 = 0
+    for h in hours:
+        m = masks[h] & inside
+        n += int(m.sum())
+        a3 += int((m & frames[h]["all3"]).sum())
+    if n == 0:
+        return default
+    return "HIGH" if a3 >= 0.5 * n else "MED"
 
 
 def blocks_from(run_time, last_valid):
@@ -474,6 +495,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     continue
                 hu = unions["HIGH"]
                 lvl = "HIGH" if hu is not None and g.intersection(hu).area >= 0.5 * g.area else "MED"
+                lvl = graded_level(g, act_masks, hours, frames, lat, lon, lvl)
                 txt = f"{win} / {lvl} / {fl if fl else '---'}"
                 if col == "yellow" and any(g.intersects(o) and txt == t for o, t in labelled_frq):
                     continue                     # same text as the orange core inside it
@@ -516,7 +538,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     if not rest.is_empty and rest.area > 0.05 * anchor.area:
                         anchor = rest
                 labels.append((key, p, anchor.representative_point(),
-                               f"{win} / {key} / {fl if fl else '---'}"))
+                               f"{win} / {graded_level(p, level_masks['HIGH'], hours, frames, lat, lon, key) if key == 'HIGH' else key} / {fl if fl else '---'}"))
 
     if hours:
         for q, col, z in sorted(dense, key=lambda t: t[2]):
@@ -598,10 +620,11 @@ a{{color:#8ab4d8}}
 
 
 def main():
-    global COV_OCNL, COV_FRQ, ACT_LPI
+    global COV_OCNL, COV_FRQ, ACT_LPI, GRADED
     cfg = yaml.safe_load(open("config/config.yaml", encoding="utf-8"))
     sw = cfg.get("sigwx", {})
     COV_OCNL = sw.get("ocnl", COV_OCNL)
+    GRADED = bool(sw.get("graded", GRADED))
     COV_FRQ = sw.get("frq", COV_FRQ)
     ACT_LPI = sw.get("act_lpi", ACT_LPI)
     logger.info(f"SIGWX density: active = LPI>={ACT_LPI} + GFS/IFS, OCNL>={COV_OCNL:.0%}, FRQ>={COV_FRQ:.0%}")
