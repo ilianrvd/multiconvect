@@ -466,22 +466,35 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                                      COV_FRQ if col == "orange" else COV_OCNL)
                 if not win:
                     continue
-                if col == "yellow" and any(g.intersects(o) for o in labelled_frq):
-                    continue                     # yellow ring around a labelled orange core
-                if col == "orange":
-                    labelled_frq.append(g)
                 hu = unions["HIGH"]
                 lvl = "HIGH" if hu is not None and g.intersection(hu).area >= 0.5 * g.area else "MED"
-                labels.append(("DENSE", g, g.representative_point(),
-                               f"{win} / {lvl} / {fl if fl else '---'}"))
+                txt = f"{win} / {lvl} / {fl if fl else '---'}"
+                if col == "yellow" and any(g.intersects(o) and txt == t for o, t in labelled_frq):
+                    continue                     # same text as the orange core inside it
+                if col == "orange":
+                    labelled_frq.append((g, txt))
+                anchor = g
+                if col == "yellow" and labelled_frq:    # arrow into yellow, not into the orange core
+                    rest = g.difference(shapely.union_all([o for o, _ in labelled_frq]))
+                    if not rest.is_empty and rest.area > 0.1 * g.area:
+                        anchor = rest
+                labels.append(("DENSE", g, anchor.representative_point(), txt))
 
         for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
+            # one fill per level (overlapping periods must not look darker), outline per period
+            if polys[key]:
+                fill, edge = COLORS[polys[key][0][3]]
+                u = shapely.union_all([q[0] for q in polys[key]])
+                for g in ([u] if u.geom_type == "Polygon" else
+                          [x for x in getattr(u, "geoms", []) if x.geom_type == "Polygon"]):
+                    x, y = g.exterior.xy
+                    ax.fill(x, y, facecolor=fill, alpha=0.55, edgecolor="none",
+                            transform=proj, zorder=z)
             for p, win, fl, col in polys[key]:
                 fill, edge = COLORS[col]
                 for g in ([p] if p.geom_type == "Polygon" else list(p.geoms)):
                     x, y = g.exterior.xy
-                    ax.fill(x, y, facecolor=fill, alpha=0.55, edgecolor=edge,
-                            linewidth=1.5, transform=proj, zorder=z)
+                    ax.plot(x, y, color=edge, linewidth=1.5, transform=proj, zorder=z + 0.1)
                 if key == "LOW":
                     continue                     # LOW is background - no label
                 # arrow points to the ring of this level, not into the inner one
