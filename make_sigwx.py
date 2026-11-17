@@ -81,6 +81,8 @@ def load_frames(mask_dir):
         # all three models (graded levels): ICON + GFS + IFS
         if "gfs_s" in d.files and "ifs_s" in d.files:
             frames[valid]["all3"] = d["gfs_s"] & d["ifs_s"]
+            frames[valid]["gfs_s"] = d["gfs_s"]
+            frames[valid]["ifs_s"] = d["ifs_s"]
         frames[valid]["run"] = str(d["run"])
     return frames
 
@@ -88,19 +90,32 @@ def load_frames(mask_dir):
 GRADED = False   # sigwx.graded: label level HIGH = ICON + GFS + IFS, MED = ICON + one of them
 
 
-def graded_level(geom, masks, hours, frames, lat, lon, default):
-    """HIGH if in most of the signal cells inside `geom` both GFS and IFS agree, else MED."""
+NEIGH_DEG = 0.25   # ~25 km tolerance: global models place convection coarsely
+MODEL_COVER = 0.20 # a model "agrees" if its signal covers this share of the (buffered) area
+
+
+MODEL_COVER_FRQ = 0.50  # FRQ cores: exact position less certain -> stricter
+
+
+def graded_level(geom, masks, hours, frames, lat, lon, default, need=None):
+    """HIGH if GFS and IFS both have convective precip over the area (with ~25 km tolerance)
+    during its hours, MED if only one. Larger areas are more likely to contain both
+    signals than small cores - the probability that CB occur somewhere in the area."""
     if not GRADED or "all3" not in frames[hours[0]]:
         return default
     inside = shapely.contains_xy(geom, lon.ravel(), lat.ravel()).reshape(lat.shape)
-    n = a3 = 0
-    for h in hours:
-        m = masks[h] & inside
-        n += int(m.sum())
-        a3 += int((m & frames[h]["all3"]).sum())
-    if n == 0:
+    near = shapely.contains_xy(geom.buffer(NEIGH_DEG), lon.ravel(), lat.ravel()).reshape(lat.shape)
+    act_h = [h for h in hours if (masks[h] & inside).any()]
+    if not act_h or not near.any():
         return default
-    return "HIGH" if a3 >= 0.5 * n else "MED"
+    cover = {}
+    for k in ("gfs_s", "ifs_s"):
+        u = np.zeros_like(near)
+        for h in act_h:
+            u |= frames[h][k]
+        cover[k] = float((u & near).sum()) / near.sum()
+    logger.info(f"    graded: GFS {cover['gfs_s']:.0%} IFS {cover['ifs_s']:.0%} of area")
+    return "HIGH" if min(cover.values()) >= (need or MODEL_COVER) else "MED"
 
 
 def blocks_from(run_time, last_valid):
@@ -495,7 +510,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     continue
                 hu = unions["HIGH"]
                 lvl = "HIGH" if hu is not None and g.intersection(hu).area >= 0.5 * g.area else "MED"
-                lvl = graded_level(g, act_masks, hours, frames, lat, lon, lvl)
+                lvl = graded_level(g, act_masks, hours, frames, lat, lon, lvl,
+                                   MODEL_COVER_FRQ if col == "orange" else None)
                 txt = f"{win} / {lvl} / {fl if fl else '---'}"
                 if col == "yellow" and any(g.intersects(o) and txt == t for o, t in labelled_frq):
                     continue                     # same text as the orange core inside it
