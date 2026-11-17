@@ -27,6 +27,7 @@ models:
 expand_pixels: 3
 
 sigwx:
+  graded: true     # label level HIGH = GFS + IFS agree near the area, MED = only one
   high_lpi: 20     # HIGH needs ICON LPI >= this + GFS/IFS (MED keeps the models.icon threshold)
   act_lpi: 20
   ocnl: 0.30
