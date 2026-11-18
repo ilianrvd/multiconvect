@@ -568,15 +568,34 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     placed = []
 
     def free_spot(tx, ty, txt, direction):
-        w, hgt = 0.075 * len(txt) + 0.1, 0.22
-        for _ in range(12):
-            box = (tx, ty, tx + w, ty + hgt)
-            if not any(box[0] < o[2] and o[0] < box[2] and box[1] < o[3] and o[1] < box[3] for o in placed):
+        """First free place near (tx, ty): steps in the preferred direction first, then the
+        other way and sideways. Every candidate is kept inside the map before it is checked."""
+        w, hgt = 0.08 * len(txt) + 0.15, 0.26
+        x_lo, x_hi = d["lon_min"] + 0.05, d["lon_max"] - w - 0.05
+        y_lo, y_hi = d["lat_min"] + 0.1, d["lat_max"] - hgt - 0.1
+
+        def clamp(x, y):
+            return min(max(x, x_lo), x_hi), min(max(y, y_lo), y_hi)
+
+        def free(x, y):
+            return not any(x < o[2] and o[0] < x + w and y < o[3] and o[1] < y + hgt for o in placed)
+
+        # candidates ordered by how far the label (and so its arrow) moves
+        cands = []
+        for k in range(16):
+            for sgn in (1, -1):
+                dy = sgn * direction * k * 0.3
+                for dx in (0, 0.8, -0.8, 1.6, -1.6, 3.2, -3.2):
+                    cost = abs(dy) + 0.7 * abs(dx) + (0.2 if sgn < 0 else 0)
+                    cands.append((cost, dx, dy))
+        best = clamp(tx, ty)
+        for _, dx, dy in sorted(cands):
+            x, y = clamp(tx + dx, ty + dy)
+            if free(x, y):
+                best = (x, y)
                 break
-            ty += direction * 0.26
-        ty = min(max(ty, d["lat_min"] + 0.1), d["lat_max"] - 0.35)
-        placed.append((tx, ty, tx + w, ty + hgt))
-        return tx, ty
+        placed.append((best[0], best[1], best[0] + w, best[1] + hgt))
+        return best
 
     high_l = [t for t in labels if t[0] == "HIGH"]
     med_l = sorted([t for t in labels if t[0] == "MED"], key=lambda t: -t[1].area)[:MAX_MED_LABELS]
