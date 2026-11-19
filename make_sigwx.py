@@ -359,6 +359,9 @@ def dense_info(p, masks, hours, frames, lat, lon, share):
     return win, _top(tops)
 
 
+BLOCK_GEOMS = {}   # b0 -> drawn HIGH / OCNL / FRQ geometry (for the sector table)
+
+
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -382,6 +385,17 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     ax.plot(bx, by, color="#777777", linewidth=2, zorder=4)
     ax.text((d["lon_min"] + d["lon_max"]) / 2, d["lat_max"] - 0.08, "LIMIT OF FORECAST",
             ha="center", va="top", fontsize=9, color="#666666", zorder=4)
+
+    # ACC sectors (approximate outlines) for orientation
+    sec_path = Path("config/sectors.geojson")
+    if sec_path.exists():
+        import sector_table as st
+        for sname, sg in st.load_sectors(sec_path).items():
+            x, y = sg.exterior.xy
+            ax.plot(x, y, color="#3355AA", linewidth=0.7, alpha=0.6, transform=proj, zorder=4.5)
+            c = sg.representative_point()
+            ax.text(c.x, c.y, sname, fontsize=8, color="#3355AA", alpha=0.8, ha="center",
+                    va="center", transform=proj, zorder=4.5)
 
     for icao, (la, lo) in AIRPORTS.items():
         ax.plot(lo, la, marker="^", color="#333333", markersize=4, zorder=5)
@@ -495,6 +509,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
+        BLOCK_GEOMS[b0] = {"HIGH": unions["HIGH"],
+                           "OCNL": next((t[0] for t in dense if t[1] == "yellow"), None),
+                           "FRQ": next((t[0] for t in dense if t[1] == "orange"), None)}
 
         # own labels for OCNL / FRQ parts: hours and FL of the dense part itself
         act_masks = {h: frames[h]["act"] for h in hours}
@@ -630,12 +647,12 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     logger.info(f"SIGWX saved: {out_path.name}  ({len(labels)} labels)")
 
 
-def write_page(out_dir, items, run_label):
+def write_page(out_dir, items, run_label, xlsx_link=""):
     stamp = datetime.utcnow().strftime("%Y%m%d%H%M")   # cache-busting: same file names every run
     days = {}
-    for f, t, day in items:
+    for f, t, day, table in items:
         days.setdefault(day, []).append(
-            f'<figure><img src="{f}?v={stamp}" alt="{t}"><figcaption>{t}</figcaption></figure>')
+            f'<figure><img src="{f}?v={stamp}" alt="{t}"><figcaption>{t}{table}</figcaption></figure>')
     cards = "".join(f'<h2>{day}</h2><div class="grid">{"".join(c)}</div>' for day, c in days.items())
     html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -647,9 +664,12 @@ h1{{font-size:20px;margin:0 0 4px}} h2{{font-size:16px;margin:24px 0 10px;color:
 figure{{margin:0;background:#1a2332;border-radius:10px;overflow:hidden}}
 img{{width:100%;display:block;background:#fff}} figcaption{{padding:8px 12px;font-size:13px;color:#aab}}
 a{{color:#8ab4d8}}
+table.sect{{border-collapse:collapse;margin-top:8px;font-size:12px;width:100%}}
+table.sect th,table.sect td{{border:1px solid #33415a;padding:3px 6px;text-align:center}}
+table.sect th{{color:#8ab4d8;font-weight:600}} .sect.none{{margin-top:6px;color:#667}}
 </style></head><body>
 <h1>FIR SIGWX CB &mdash; experimental</h1>
-<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = ICON alone or GFS+IFS, dark green = ICON + GFS/IFS, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a></div>
+<div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = ICON alone or GFS+IFS, dark green = ICON + GFS/IFS, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a>{xlsx_link}</div>
 {cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
@@ -672,12 +692,31 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("sigwx_*.png"):
         old.unlink()
-    items = []
-    for i, (b0, b1) in enumerate(blocks_from(run_time, max(frames)), 1):
-        name = f"sigwx_{i}.png"
-        plot_block(frames, b0, b1, cfg, out_dir / name, run_label)
-        items.append((name, f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}"))
-    write_page(out_dir, items, run_label)
+    blocks = blocks_from(run_time, max(frames))
+    for i, (b0, b1) in enumerate(blocks, 1):
+        plot_block(frames, b0, b1, cfg, out_dir / f"sigwx_{i}.png", run_label)
+
+    # sector table (ACC sectors, if the sector file is there)
+    tables, xlsx_link = {}, ""
+    sec_path = Path("config/sectors.geojson")
+    if sec_path.exists():
+        import sector_table as st
+        sectors = st.load_sectors(sec_path)
+        day_blocks = {}
+        for b0, b1 in blocks:
+            rows = st.block_rows(frames, BLOCK_GEOMS.get(b0, {}), b0, sectors, hh, to_fl, MIN_CB_FL)
+            tables[b0] = st.html_table(rows)
+            day_blocks.setdefault(f"{b0:%d.%m.%Y}", {})[f"{hh(b0)}-{hh(b1, True)}"] = rows
+        for old in out_dir.glob("sectors_*.xlsx"):
+            old.unlink()
+        xname = f"sectors_{run_time:%Y%m%d_%H}z.xlsx"
+        st.write_xlsx(day_blocks, out_dir / xname)
+        xlsx_link = f' &middot; <a href="{xname}">sector table (xlsx)</a>'
+        logger.info(f"Sector table: {xname}")
+
+    items = [(f"sigwx_{i}.png", f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}", tables.get(b0, ""))
+             for i, (b0, b1) in enumerate(blocks, 1)]
+    write_page(out_dir, items, run_label, xlsx_link)
 
 
 if __name__ == "__main__":
