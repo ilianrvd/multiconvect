@@ -12,8 +12,9 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
-ORDER = {"SOFIA": ["SA", "SC", "SB", "SD", "SE", "SF"], "VARNA": ["VA", "VC", "VB", "VD"]}
-FS_TITLE = {"SOFIA": "ФС СОФИЯ", "VARNA": "ФС ВАРНА"}
+ORDER = {"SOFIA": ["SA", "SC", "SB", "SD", "SE", "SF"], "VARNA": ["VA", "VC", "VB", "VD"],
+         "IST_EAST": ["I-EAST"], "IST_WEST": ["I-WEST"]}
+FS_TITLE = {"SOFIA": "ФС СОФИЯ", "VARNA": "ФС ВАРНА", "IST_EAST": "ISTANBUL EAST", "IST_WEST": "ISTANBUL WEST"}
 MIN_SHARE = 0.03      # below 3 % of the sector -> "-"
 MIN_CELLS = 3         # hour counts for TIME if at least this many signal cells inside
 COLOURS = {"ISOL": "#5FA35C", "OCNL": "#F2E04A", "FRQ": "#F59E2E"}
@@ -118,7 +119,7 @@ def write_xlsx(day_blocks, out_path):
             for c in row:
                 c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 c.border = box
-                if c.value in (FS_TITLE["SOFIA"], FS_TITLE["VARNA"], "СЕКТОР"):
+                if c.value in list(FS_TITLE.values()) + ["СЕКТОР"]:
                     c.font = Font(bold=True)
         for col, w in zip("ABCDEFG", (14, 12, 12, 10, 10, 10, 10)):
             ws.column_dimensions[col].width = w
