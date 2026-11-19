@@ -9,6 +9,7 @@ or 3 h if the zone changes; min 2 h).
 Experimental - not an official product.
 """
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -718,12 +719,12 @@ def main():
         day0 = run_time.replace(hour=0)
         keep = [f"{day0 + timedelta(days=k):%d.%m.%Y}" for k in (0, 1)]
         state = {d: state.get(d, {}) for d in keep}
-        (out_dir / "sectors_state.json").write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-        for old in out_dir.glob("sectors*.xlsx"):
+        # not linked from the page; the names can be made private with the SECTORS_NAME secret
+        base = (os.environ.get("SECTORS_NAME") or "sectors").strip()
+        for old in list(out_dir.glob("*.xlsx")) + list(out_dir.glob("*_state.json")):
             old.unlink()
-        st.write_xlsx(state, out_dir / "sectors.xlsx")
-        stamp = datetime.utcnow().strftime("%Y%m%d%H%M")
-        xlsx_link = f' &middot; <a href="sectors.xlsx?v={stamp}" download>sector table (xlsx)</a>'
+        (out_dir / f"{base}_state.json").write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        st.write_xlsx(state, out_dir / f"{base}.xlsx")
         logger.info(f"Sector table: {', '.join(keep)}")
 
     items = [(f"sigwx_{i}.png", f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}", "")
