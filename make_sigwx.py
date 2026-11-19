@@ -697,24 +697,36 @@ def main():
         plot_block(frames, b0, b1, cfg, out_dir / f"sigwx_{i}.png", run_label)
 
     # sector table (ACC sectors, if the sector file is there)
-    tables, xlsx_link = {}, ""
+    # sector table (ACC sectors): kept for the run's day and the next day; blocks this run
+    # does not cover are taken over from the previous run's state (prev_sectors_state.json)
+    xlsx_link = ""
     sec_path = Path("config/sectors.geojson")
     if sec_path.exists():
+        import json
         import sector_table as st
         sectors = st.load_sectors(sec_path)
-        day_blocks = {}
+        prev_path = Path("prev_sectors_state.json")
+        state = {}
+        if prev_path.exists():
+            try:
+                state = json.loads(prev_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                logger.warning(f"Sector state not readable: {e}")
         for b0, b1 in blocks:
             rows = st.block_rows(frames, BLOCK_GEOMS.get(b0, {}), b0, sectors, hh, to_fl, MIN_CB_FL)
-            tables[b0] = st.html_table(rows)
-            day_blocks.setdefault(f"{b0:%d.%m.%Y}", {})[f"{hh(b0)}-{hh(b1, True)}"] = rows
-        for old in out_dir.glob("sectors_*.xlsx"):
+            state.setdefault(f"{b0:%d.%m.%Y}", {})[f"{hh(b0)}-{hh(b1, True)}"] = {"run": run_label, "rows": rows}
+        day0 = run_time.replace(hour=0)
+        keep = [f"{day0 + timedelta(days=k):%d.%m.%Y}" for k in (0, 1)]
+        state = {d: state.get(d, {}) for d in keep}
+        (out_dir / "sectors_state.json").write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        for old in out_dir.glob("sectors*.xlsx"):
             old.unlink()
-        xname = f"sectors_{run_time:%Y%m%d_%H}z.xlsx"
-        st.write_xlsx(day_blocks, out_dir / xname)
-        xlsx_link = f' &middot; <a href="{xname}">sector table (xlsx)</a>'
-        logger.info(f"Sector table: {xname}")
+        st.write_xlsx(state, out_dir / "sectors.xlsx")
+        stamp = datetime.utcnow().strftime("%Y%m%d%H%M")
+        xlsx_link = f' &middot; <a href="sectors.xlsx?v={stamp}" download>sector table (xlsx)</a>'
+        logger.info(f"Sector table: {', '.join(keep)}")
 
-    items = [(f"sigwx_{i}.png", f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}", tables.get(b0, ""))
+    items = [(f"sigwx_{i}.png", f"{hh(b0)}-{hh(b1, True)} UTC", f"{b0:%d.%m.%Y}", "")
              for i, (b0, b1) in enumerate(blocks, 1)]
     write_page(out_dir, items, run_label, xlsx_link)
 

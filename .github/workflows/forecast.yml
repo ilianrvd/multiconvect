@@ -37,6 +37,7 @@ jobs:
             shapely
             pyyaml
             requests
+            openpyxl
 
       - name: Install herbie
         shell: bash -l {0}
@@ -48,6 +49,7 @@ jobs:
           mkdir -p logs
           python run.py --auto
           python make_gallery.py
+          curl -sf https://ilianrvd.github.io/multiconvect/sigwx/sectors_state.json -o prev_sectors_state.json || true
           python make_sigwx.py
 
       - uses: actions/upload-pages-artifact@v3

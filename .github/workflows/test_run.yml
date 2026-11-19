@@ -21,7 +21,7 @@ jobs:
           environment-name: mc
           create-args: >-
             python=3.11 xarray cfgrib eccodes scipy numpy matplotlib=3.9
-            cartopy shapely pyyaml requests
+            cartopy shapely pyyaml requests openpyxl
 
       - name: Run
         shell: bash -l {0}

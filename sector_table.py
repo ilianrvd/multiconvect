@@ -88,8 +88,9 @@ def html_table(rows):
     return f'<table class="sect">{head}{body}</table>'
 
 
-def write_xlsx(day_blocks, out_path):
-    """day_blocks: {date_str: {'00-06': rows, ...}} -> one sheet per date, form layout."""
+def write_xlsx(state, out_path):
+    """state: {date_str: {'00-06': {'run': label, 'rows': rows}, ...}} -> one sheet per date,
+    form layout; column H names the run each block comes from."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
     wb = Workbook()
@@ -97,20 +98,22 @@ def write_xlsx(day_blocks, out_path):
     thin = Side(style="thin", color="999999")
     box = Border(left=thin, right=thin, top=thin, bottom=thin)
     fills = {c: PatternFill("solid", fgColor=v.lstrip("#")) for c, v in COLOURS.items()}
-    for day, blocks in day_blocks.items():
+    for day, blocks in state.items():
         ws = wb.create_sheet(day.replace(".", "-"))
         ws.append(["СЕКТОР", "карта FIR-SIGWX", "период (хх-хх)", "TOP FL (xxx)",
-                   "Процентно запълване с ISOL/OCNL/FRQ (xx)", None, None])
+                   "Процентно запълване с ISOL/OCNL/FRQ (xx)", None, None, "RUN"])
         ws.merge_cells(start_row=1, start_column=5, end_row=1, end_column=7)
         for fs, names in ORDER.items():
-            ws.append([FS_TITLE[fs], None, "TIME", "TOP", "ISOL", "OCNL", "FRQ"])
-            ws.append([None, None, "UTC", "FL", "%", "%", "%"])
+            ws.append([FS_TITLE[fs], None, "TIME", "TOP", "ISOL", "OCNL", "FRQ", None])
+            ws.append([None, None, "UTC", "FL", "%", "%", "%", None])
             for n in names:
                 first = ws.max_row + 1
                 for blk in ("00-06", "06-12", "12-18", "18-24"):
-                    r = (blocks.get(blk) or {}).get(n, {})
+                    b = blocks.get(blk) or {}
+                    r = (b.get("rows") or {}).get(n, {})
                     vals = [r.get("TIME"), r.get("TOP"), r.get("ISOL"), r.get("OCNL"), r.get("FRQ")]
-                    ws.append([n if blk == "00-06" else None, blk] + [v if v else "-" for v in vals])
+                    ws.append([n if blk == "00-06" else None, blk] + [v if v else "-" for v in vals]
+                              + [b.get("run", "n/a")])
                     for j, c in enumerate(("ISOL", "OCNL", "FRQ")):
                         if r.get(c):
                             ws.cell(ws.max_row, 5 + j).fill = fills[c]
@@ -121,7 +124,7 @@ def write_xlsx(day_blocks, out_path):
                 c.border = box
                 if c.value in list(FS_TITLE.values()) + ["СЕКТОР"]:
                     c.font = Font(bold=True)
-        for col, w in zip("ABCDEFG", (14, 12, 12, 10, 10, 10, 10)):
+        for col, w in zip("ABCDEFGH", (14, 12, 12, 10, 10, 10, 10, 11)):
             ws.column_dimensions[col].width = w
         ws.row_dimensions[1].height = 45
     wb.save(out_path)
