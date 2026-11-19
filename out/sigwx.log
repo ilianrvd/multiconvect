@@ -1,0 +1,59 @@
+18:26:13  SIGWX density: active = LPI>=20 + GFS/IFS, OCNL>=30%, FRQ>=60%
+/home/runner/micromamba/envs/mc/lib/python3.11/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_coastline.zip
+  warnings.warn(f'Downloading: {url}', DownloadWarning)
+18:26:16  SIGWX saved: sigwx_1.png  (0 labels)
+18:26:16    19.11 18z block  MED  18-20  OCNL=2% FRQ=0%  maxdens[LPI>=10/15/20/25]=79%/50%/39%/8%
+18:26:16    19.11 18z block  MED  20-24  OCNL=11% FRQ=0%  maxdens[LPI>=10/15/20/25]=73%/64%/62%/55%
+18:26:16    19.11 18z block  HIGH 18-21  OCNL=42% FRQ=0%  maxdens[LPI>=10/15/20/25]=69%/66%/59%/35%
+18:26:16    19.11 18z block  HIGH 19-22  OCNL=6% FRQ=0%  maxdens[LPI>=10/15/20/25]=55%/34%/33%/33%
+18:26:16    19.11 18z block  HIGH 22-24  OCNL=17% FRQ=9%  maxdens[LPI>=10/15/20/25]=98%/96%/89%/74%
+18:26:16    19.11 18z block  HIGH 20-21  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=33%/20%/4%/0%
+18:26:16      graded: GFS 80% IFS 91% of area
+18:26:16      graded: GFS 67% IFS 81% of area
+18:26:16      graded: GFS 11% IFS 90% of area
+18:26:16      graded: GFS 35% IFS 64% of area
+18:26:16      graded: GFS 32% IFS 68% of area
+18:26:16  SIGWX saved: sigwx_2.png  (5 labels)
+18:26:16    20.11 00z block  MED  00-02  OCNL=3% FRQ=0%  maxdens[LPI>=10/15/20/25]=50%/49%/48%/46%
+18:26:16    20.11 00z block  MED  02-05  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=32%/22%/19%/18%
+18:26:16    20.11 00z block  MED  01-03  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 00z block  HIGH 00-04  OCNL=11% FRQ=0%  maxdens[LPI>=10/15/20/25]=58%/54%/51%/47%
+18:26:16      graded: GFS 62% IFS 74% of area
+18:26:16      graded: GFS 19% IFS 60% of area
+18:26:16  SIGWX saved: sigwx_3.png  (4 labels)
+18:26:16    20.11 06z block  MED  10-12  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16  SIGWX saved: sigwx_4.png  (1 labels)
+18:26:16    20.11 12z block  MED  12-16  OCNL=4% FRQ=0%  maxdens[LPI>=10/15/20/25]=61%/50%/43%/28%
+18:26:16    20.11 12z block  MED  16-18  OCNL=16% FRQ=17%  maxdens[LPI>=10/15/20/25]=100%/100%/97%/91%
+18:26:16    20.11 12z block  MED  12-14  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=2%/0%/0%/0%
+18:26:16    20.11 12z block  MED  13-17  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 12z block  MED  14-16  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 12z block  MED  16-18  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 12z block  MED  16-18  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=33%/20%/4%/0%
+18:26:16    20.11 12z block  HIGH 13-16  OCNL=19% FRQ=0%  maxdens[LPI>=10/15/20/25]=67%/67%/57%/37%
+18:26:16    20.11 12z block  HIGH 16-18  OCNL=25% FRQ=28%  maxdens[LPI>=10/15/20/25]=100%/100%/97%/91%
+18:26:16    20.11 12z block  HIGH 14-15  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=4%/2%/2%/0%
+18:26:16    20.11 12z block  HIGH 14-15  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=47%/37%/12%/0%
+18:26:16    20.11 12z block  HIGH 17-18  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=51%/37%/8%/0%
+18:26:16      graded: GFS 81% IFS 88% of area
+18:26:16      graded: GFS 80% IFS 84% of area
+18:26:16      graded: GFS 77% IFS 69% of area
+18:26:16      graded: GFS 9% IFS 23% of area
+18:26:16  SIGWX saved: sigwx_5.png  (8 labels)
+18:26:16    20.11 18z block  MED  18-24  OCNL=22% FRQ=4%  maxdens[LPI>=10/15/20/25]=83%/81%/74%/64%
+18:26:16    20.11 18z block  MED  18-24  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 18z block  MED  18-21  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=0%/0%/0%/0%
+18:26:16    20.11 18z block  MED  18-21  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=21%/14%/10%/6%
+18:26:16    20.11 18z block  MED  21-24  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=3%/0%/0%/0%
+18:26:16    20.11 18z block  MED  18-21  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=26%/20%/17%/7%
+18:26:16    20.11 18z block  MED  19-24  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=3%/0%/0%/0%
+18:26:16    20.11 18z block  HIGH 18-22  OCNL=30% FRQ=23%  maxdens[LPI>=10/15/20/25]=100%/99%/97%/89%
+18:26:16    20.11 18z block  HIGH 22-24  OCNL=6% FRQ=0%  maxdens[LPI>=10/15/20/25]=56%/47%/36%/24%
+18:26:16    20.11 18z block  HIGH 18-21  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=21%/14%/10%/6%
+18:26:16    20.11 18z block  HIGH 18-20  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=36%/30%/26%/9%
+18:26:16      graded: GFS 89% IFS 94% of area
+18:26:16      graded: GFS 81% IFS 89% of area
+18:26:16      graded: GFS 84% IFS 73% of area
+18:26:16      graded: GFS 46% IFS 23% of area
+18:26:16      graded: GFS 5% IFS 31% of area
+18:26:17  SIGWX saved: sigwx_6.png  (9 labels)
