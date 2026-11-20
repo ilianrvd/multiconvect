@@ -706,6 +706,8 @@ def main():
         import json
         import sector_table as st
         sectors = st.load_sectors(sec_path)
+        min_top = st.min_tops(sectors, (cfg.get("sigwx") or {}).get("sector_min_top"))
+        logger.info("Sector min TOP: " + ", ".join(f"{k} {v}" for k, v in min_top.items()))
         prev_path = Path("prev_sectors_state.json")
         state = {}
         if prev_path.exists():
@@ -716,7 +718,8 @@ def main():
             except Exception as e:
                 logger.warning(f"Sector state not readable: {e}")
         for b0, b1 in blocks:
-            rows = st.block_rows(frames, BLOCK_GEOMS.get(b0, {}), b0, sectors, hh, to_fl, MIN_CB_FL)
+            rows = st.block_rows(frames, BLOCK_GEOMS.get(b0, {}), b0, sectors, hh, to_fl, MIN_CB_FL,
+                                 min_top)
             state.setdefault(f"{b0:%d.%m.%Y}", {})[f"{hh(b0)}-{hh(b1, True)}"] = {"run": run_label, "rows": rows}
         day0 = run_time.replace(hour=0)
         keep = [f"{day0 + timedelta(days=k):%d.%m.%Y}" for k in (0, 1)]

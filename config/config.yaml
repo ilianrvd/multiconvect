@@ -27,6 +27,7 @@ models:
 expand_pixels: 3
 
 sigwx:
+  sector_min_top: {istanbul: 180, adjacent: 220, other: 250}   # sector table: minimum TOP FL
   graded: true     # label level HIGH = GFS + IFS agree near the area, MED = only one
   high_lpi: 20     # HIGH needs ICON LPI >= this + GFS/IFS (MED keeps the models.icon threshold)
   act_lpi: 20

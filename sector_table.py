@@ -35,7 +35,23 @@ def _pct(share):
     return int(min(100, max(10, round(share * 10) * 10)))
 
 
-def block_rows(frames, geoms, b0, sectors, hh, to_fl, min_fl=100):
+def min_tops(sectors, cfg_tops=None):
+    """Minimum TOP for a sector to enter the table: Istanbul sectors, the sectors bordering
+    them, all others (sigwx.sector_min_top in config)."""
+    t = {"istanbul": 180, "adjacent": 220, "other": 250, **(cfg_tops or {})}
+    ist = {n: g for n, g in sectors.items() if n.startswith("I-")}
+    out = {}
+    for n, g in sectors.items():
+        if n in ist:
+            out[n] = t["istanbul"]
+        elif any(g.distance(i) < 0.02 for i in ist.values()):
+            out[n] = t["adjacent"]
+        else:
+            out[n] = t["other"]
+    return out
+
+
+def block_rows(frames, geoms, b0, sectors, hh, to_fl, min_fl=100, min_top=None):
     """geoms: {'HIGH': geom|None, 'OCNL': geom|None, 'FRQ': geom|None} of the drawn SIGWX block."""
     hours = [h for h in (b0 + timedelta(hours=i) for i in range(6)) if h in frames]
     rows = {}
@@ -67,6 +83,8 @@ def block_rows(frames, geoms, b0, sectors, hh, to_fl, min_fl=100):
             if tops:
                 fl = to_fl(float(np.percentile(tops, 90)))
                 row["TOP"] = fl if fl and fl >= min_fl else None
+        if min_top and (row["TOP"] is None or row["TOP"] < min_top.get(name, 0)):
+            row = {"TIME": None, "TOP": None, "ISOL": None, "OCNL": None, "FRQ": None}
         rows[name] = row
     return rows
 
