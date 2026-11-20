@@ -711,6 +711,8 @@ def main():
         if prev_path.exists():
             try:
                 state = json.loads(prev_path.read_text(encoding="utf-8"))
+                logger.info("Sector state from previous run: " + "; ".join(
+                    f"{d} {','.join(sorted(v))}" for d, v in state.items()))
             except Exception as e:
                 logger.warning(f"Sector state not readable: {e}")
         for b0, b1 in blocks:
