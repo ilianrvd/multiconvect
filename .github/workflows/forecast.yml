@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -53,6 +53,21 @@ jobs:
           python make_sigwx.py
         env:
           SECTORS_NAME: ${{ secrets.SECTORS_NAME }}
+
+      - name: Archive run summary (branch stats)
+        continue-on-error: true
+        shell: bash -l {0}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          if git fetch -q origin stats:stats 2>/dev/null; then
+            git worktree add -q ../stats stats
+          else
+            git worktree add -q --detach ../stats
+            (cd ../stats && git checkout -q --orphan stats && git rm -rfq . )
+          fi
+          python tools/run_summary.py ../stats/stats
+          cd ../stats && git add stats && git commit -qm "Run summary $(date -u +%Y-%m-%dT%H:%MZ)" && git push -q origin stats
 
       - uses: actions/upload-pages-artifact@v3
         with:
