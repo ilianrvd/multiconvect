@@ -142,8 +142,8 @@ def to_fl(meters):
     return int(round(meters * M_TO_FT / 100 / 10) * 10)
 
 
-SHIFT_KM = 50      # centroid shift that starts a new period polygon
-KEEP_SHARE = 0.5   # new period when less than this share of the zone is inside the start footprint
+SHIFT_KM = 100     # centroid shift that starts a new period polygon (growing zones shift easily)
+KEEP_SHARE = 0.3   # new period when less than this share of the zone is inside the start footprint
 STILL_SHARE = 0.8  # above this the zone counts as stationary (no 3 h cap)
 MAX_HOURS = 3      # a changing zone is split at least every 3 hours
 MIN_HOURS = 2      # shorter pieces are merged into the neighbouring period
