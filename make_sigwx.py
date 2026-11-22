@@ -382,6 +382,10 @@ def _fill_with_holes(ax, poly, transform, **kw):
     ax.add_patch(PathPatch(MPath(verts, codes), transform=transform, **kw))
 
 
+ARROW_DEG = 0.5        # parts of one item closer than this share one label (several arrows)
+YELLOW_LABEL_KM2 = 3000  # smaller yellow pieces (slivers around orange) get no label of their own
+
+
 def _cluster(parts, dist):
     """Group polygons that lie within `dist` of each other; returns one (Multi)Polygon per group,
     largest groups first."""
@@ -591,16 +595,23 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     rest = g.difference(shapely.union_all([o for o, _t, _w in labelled_frq]))
                     if not rest.is_empty and rest.area > 0.1 * g.area:
                         anchor = rest
-                # one label, one arrow to every separate part of the item (largest first)
-                # (orange only: yellow is one area with the orange cut out, one arrow is enough)
+                # parts of the item: every part gets an arrow; parts close to each other
+                # (ARROW_DEG) share one label, distant parts get their own label (same text).
+                # Yellow slivers left between orange cores are not labelled separately.
+                min_part = MIN_DENSE_KM2 if col == "orange" else YELLOW_LABEL_KM2
                 parts_ = sorted([x for x in ([anchor] if anchor.geom_type == "Polygon"
                                              else getattr(anchor, "geoms", [])) if x.geom_type == "Polygon"
-                                 and _area_km2(x) >= MIN_DENSE_KM2], key=lambda x: -x.area)
+                                 and _area_km2(x) >= min_part], key=lambda x: -x.area)
                 if not parts_:
                     parts_ = [max(getattr(anchor, "geoms", [anchor]), key=lambda x: x.area)]
-                if col == "yellow":
-                    parts_ = parts_[:1]
-                labels.append(("DENSE", g, [x.representative_point() for x in parts_], txt))
+                while parts_:
+                    main_ = parts_.pop(0)
+                    near_ = ([x for x in parts_ if x.distance(main_) <= ARROW_DEG]
+                             if col == "orange" else [])   # yellow: one label per visible piece
+                    parts_ = [x for x in parts_ if x not in near_]
+                    grp = [main_] + near_
+                    labels.append(("DENSE", shapely.union_all(grp),
+                                   [x.representative_point() for x in grp], txt))
 
         for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
             # one fill per level (overlapping periods must not look darker), outline per period
