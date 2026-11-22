@@ -348,10 +348,13 @@ def dense_info(p, masks, hours, frames, lat, lon, share):
     cov = {h: float((masks[h] & inside).sum()) / n for h in hours}
     present = [h for h in hours if cov[h] >= share]
     if not present:
-        best = max(hours, key=lambda h: cov[h])
-        if cov[best] == 0:
+        # large part (e.g. a wide yellow area): coverage of the whole part never reaches the
+        # threshold, so take the hours with at least half of its peak coverage
+        peak = max(cov.values())
+        if peak == 0:
             return None, None
-        present = [best]
+        present = [h for h in hours if cov[h] >= 0.5 * peak]
+        present = [h for h in hours if present[0] <= h <= present[-1]]
     tops = []
     for h in present:
         v = frames[h]["htop"][masks[h] & inside]
