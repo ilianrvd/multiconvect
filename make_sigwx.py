@@ -356,11 +356,38 @@ def dense_info(p, masks, hours, frames, lat, lon, share):
     for h in present:
         v = frames[h]["htop"][masks[h] & inside]
         tops.extend(v[v > 0].tolist())
+    if not tops:                      # ICON gives LPI but no HTOP in those cells: use the whole part
+        for h in hours:
+            v = frames[h]["htop"][inside]
+            tops.extend(v[v > 0].tolist())
     win = f"{hh(present[0])}-{hh(present[-1] + timedelta(hours=1), True)}"
     return win, _top(tops)
 
 
 BLOCK_GEOMS = {}   # b0 -> drawn HIGH / OCNL / FRQ geometry (for the sector table)
+CLUSTER_DEG = 0.25  # OCNL/FRQ parts of one colour closer than this (~25 km) get one label
+
+
+def _fill_with_holes(ax, poly, transform, **kw):
+    from matplotlib.path import Path as MPath
+    from matplotlib.patches import PathPatch
+    verts, codes = [], []
+    for ring in [poly.exterior] + list(poly.interiors):
+        xy = np.asarray(ring.coords)
+        verts.extend(xy.tolist())
+        codes.extend([MPath.MOVETO] + [MPath.LINETO] * (len(xy) - 2) + [MPath.CLOSEPOLY])
+    ax.add_patch(PathPatch(MPath(verts, codes), transform=transform, **kw))
+
+
+def _cluster(parts, dist):
+    """Group polygons that lie within `dist` of each other; returns one (Multi)Polygon per group,
+    largest groups first."""
+    groups = []
+    for p in sorted(parts, key=lambda g: -g.area):
+        near = [g for g in groups if any(p.distance(x) <= dist for x in g)]
+        merged = [p] + [x for g in near for x in g]
+        groups = [g for g in groups if g not in near] + [merged]
+    return [shapely.union_all(g) for g in sorted(groups, key=lambda g: -sum(x.area for x in g))]
 
 
 def plot_block(frames, b0, b1, cfg, out_path, run_label):
@@ -508,6 +535,12 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
             if parts:
                 dense.append((shapely.union_all(parts), col, zs[col]))
 
+        # yellow is not drawn under orange (overlap would look like a third, darker colour)
+        orange = next((t[0] for t in dense if t[1] == "orange"), None)
+        if orange is not None:
+            dense = [(t[0].difference(orange), t[1], t[2]) if t[1] == "yellow" else t for t in dense]
+            dense = [t for t in dense if not t[0].is_empty]
+
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
         BLOCK_GEOMS[b0] = {"HIGH": unions["HIGH"],
@@ -518,10 +551,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         act_masks = {h: frames[h]["act"] for h in hours}
         labelled_frq = []
         for q, col, z in sorted(dense, key=lambda t: -t[2]):      # orange first
-            for g in ([q] if q.geom_type == "Polygon" else
-                      [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
-                if _area_km2(g) < MIN_DENSE_KM2:
-                    continue
+            parts = [x for x in ([q] if q.geom_type == "Polygon" else getattr(q, "geoms", []))
+                     if x.geom_type == "Polygon" and _area_km2(x) >= MIN_DENSE_KM2]
+            for g in _cluster(parts, CLUSTER_DEG):  # nearby parts of one colour share one label
                 win, fl = dense_info(g, act_masks, hours, frames, lat, lon,
                                      COV_FRQ if col == "orange" else COV_OCNL)
                 if not win:
@@ -540,6 +572,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     rest = g.difference(shapely.union_all([o for o, _ in labelled_frq]))
                     if not rest.is_empty and rest.area > 0.1 * g.area:
                         anchor = rest
+                if anchor.geom_type != "Polygon":       # arrow to the largest part of the group
+                    anchor = max(getattr(anchor, "geoms", [anchor]), key=lambda x: x.area)
                 labels.append(("DENSE", g, anchor.representative_point(), txt))
 
         for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
@@ -577,10 +611,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     if hours:
         for q, col, z in sorted(dense, key=lambda t: t[2]):
             fill, edge = COLORS[col]
-            for g in ([q] if q.geom_type == "Polygon" else [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
-                x, y = g.exterior.xy
-                ax.fill(x, y, facecolor=fill, alpha=0.8, edgecolor=edge,
-                        linewidth=1.0, transform=proj, zorder=z)
+            polys_ = [q] if q.geom_type == "Polygon" else [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]
+            for g in polys_:                    # path with holes (yellow has orange cut out of it)
+                _fill_with_holes(ax, g, proj, facecolor=fill, alpha=0.8, edgecolor=edge,
+                                 linewidth=1.0, zorder=z)
 
     # HIGH labels above the zone, MED below, LOW left; shifted until they do not overlap
     placed = []
