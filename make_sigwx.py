@@ -585,9 +585,16 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     rest = g.difference(shapely.union_all([o for o, _ in labelled_frq]))
                     if not rest.is_empty and rest.area > 0.1 * g.area:
                         anchor = rest
-                if anchor.geom_type != "Polygon":       # arrow to the largest part of the group
-                    anchor = max(getattr(anchor, "geoms", [anchor]), key=lambda x: x.area)
-                labels.append(("DENSE", g, anchor.representative_point(), txt))
+                # one label, one arrow to every separate part of the item (largest first)
+                # (orange only: yellow is one area with the orange cut out, one arrow is enough)
+                parts_ = sorted([x for x in ([anchor] if anchor.geom_type == "Polygon"
+                                             else getattr(anchor, "geoms", [])) if x.geom_type == "Polygon"
+                                 and _area_km2(x) >= MIN_DENSE_KM2], key=lambda x: -x.area)
+                if not parts_:
+                    parts_ = [max(getattr(anchor, "geoms", [anchor]), key=lambda x: x.area)]
+                if col == "yellow":
+                    parts_ = parts_[:1]
+                labels.append(("DENSE", g, [x.representative_point() for x in parts_], txt))
 
         for key, z in (("LOW", 1), ("MED", 2), ("HIGH", 3)):
             # one fill per level (overlapping periods must not look darker), outline per period
@@ -670,6 +677,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
     dense_l = [t for t in labels if t[0] == "DENSE"]
     labels = dense_l + high_l + med_l
     for k, (key, p, c, txt) in enumerate(labels):
+        extra = []
+        if isinstance(c, list):                  # OCNL/FRQ item with several parts
+            c, extra = c[0], c[1:]
         x0, y0, x1, y1 = p.bounds
         if key == "HIGH":
             tx, ty = free_spot(c.x + 0.2, y1 + 0.3, txt, +1)
@@ -680,6 +690,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         ax.annotate(txt, xy=(c.x, c.y), xytext=(tx, ty), fontsize=9, zorder=6,
                     bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#888888"),
                     arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
+        for e in extra:
+            ax.annotate("", xy=(e.x, e.y), xytext=(tx, ty), zorder=6,
+                        arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
 
     ax.set_title(f"FIR SIGWX  CB  (experimental)   VALID {hh(b0)}-{hh(b1, True)} UTC "
                  f"{b0:%d.%m.%Y}   |   RUN {run_label}", fontsize=11)
