@@ -368,7 +368,7 @@ def dense_info(p, masks, hours, frames, lat, lon, share):
 
 
 BLOCK_GEOMS = {}   # b0 -> drawn HIGH / OCNL / FRQ geometry (for the sector table)
-CLUSTER_DEG = 1.0  # OCNL/FRQ parts of one colour and period closer than this (~100 km) = one item
+CLUSTER_DEG = 0.5  # OCNL/FRQ parts of one colour and period closer than this (~50 km) = one item
 
 
 def _fill_with_holes(ax, poly, transform, **kw):
@@ -571,18 +571,24 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                                      COV_FRQ if col == "orange" else COV_OCNL)
                 if not win:
                     continue
+                if col == "yellow":
+                    # FRQ implies at least OCNL around it: the OCNL period covers the periods
+                    # of the orange parts inside / next to it
+                    for o, _t, o_win in labelled_frq:
+                        if g.distance(o) <= 0.1:
+                            win = _merge_win(win, o_win)
                 hu = unions["HIGH"]
                 lvl = "HIGH" if hu is not None and g.intersection(hu).area >= 0.5 * g.area else "MED"
                 lvl = graded_level(g, act_masks, hours, frames, lat, lon, lvl,
                                    MODEL_COVER_FRQ if col == "orange" else None)
                 txt = f"{win} / {lvl} / {fl if fl else '---'}"
-                if col == "yellow" and any(g.intersects(o) and txt == t for o, t in labelled_frq):
+                if col == "yellow" and any(g.intersects(o) and txt == t for o, t, _w in labelled_frq):
                     continue                     # same text as the orange core inside it
                 if col == "orange":
-                    labelled_frq.append((g, txt))
+                    labelled_frq.append((g, txt, win))
                 anchor = g
                 if col == "yellow" and labelled_frq:    # arrow into yellow, not into the orange core
-                    rest = g.difference(shapely.union_all([o for o, _ in labelled_frq]))
+                    rest = g.difference(shapely.union_all([o for o, _t, _w in labelled_frq]))
                     if not rest.is_empty and rest.area > 0.1 * g.area:
                         anchor = rest
                 # one label, one arrow to every separate part of the item (largest first)
