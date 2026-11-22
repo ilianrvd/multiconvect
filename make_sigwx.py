@@ -368,7 +368,7 @@ def dense_info(p, masks, hours, frames, lat, lon, share):
 
 
 BLOCK_GEOMS = {}   # b0 -> drawn HIGH / OCNL / FRQ geometry (for the sector table)
-CLUSTER_DEG = 0.25  # OCNL/FRQ parts of one colour closer than this (~25 km) get one label
+CLUSTER_DEG = 1.0  # OCNL/FRQ parts of one colour and period closer than this (~100 km) = one item
 
 
 def _fill_with_holes(ax, poly, transform, **kw):
@@ -470,7 +470,8 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                     for q in get_polygons(sub, lat, lon, min_distance_deg=0.1, min_pixels=6):
                         q = q.intersection(zone)
                         if not q.is_empty and q.area > 0:
-                            dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3))
+                            dense.append((q, col, 4 if cls == "FRQ" else 3.5 if key == "HIGH" else 3,
+                                          frozenset(seg["hours"])))
                 logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
                             f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
 
@@ -508,41 +509,51 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         # MED dense parts are not drawn where a HIGH zone already is (yellow over yellow)
         if polys["HIGH"]:
             hu = shapely.union_all([q[0] for q in polys["HIGH"]])
-            clipped = []
-            for q, col, z in dense:
-                if z == 3:                                   # MED OCNL / FRQ
-                    q = q.difference(hu)
-                if not q.is_empty and q.area > 0:
-                    clipped.append((q, col, z))
-            dense = clipped
-        dense = [t for t in dense
-                 if any(t[0].intersects(q[0]) for k in ("MED", "HIGH") for q in polys[k])]
-        # one outline per colour: overlapping dense parts of different periods are merged
-        merged, zs = {}, {}
-        for q, col, z in dense:
-            merged.setdefault(col, []).append(q)
-            zs[col] = max(zs.get(col, 0), z)
-        # small FRQ cores -> OCNL; tiny parts dropped (so every drawn part can carry a label)
+            dense = [(q.difference(hu) if z == 3 else q, col, z, hs) for q, col, z, hs in dense]
+        dense = [t for t in dense if not t[0].is_empty and t[0].area > 0
+                 and any(t[0].intersects(q[0]) for k in ("MED", "HIGH") for q in polys[k])]
+
         def _parts(geom):
             return [x for x in ([geom] if geom.geom_type == "Polygon" else getattr(geom, "geoms", []))
                     if x.geom_type == "Polygon"]
-        if "orange" in merged:
-            keep = []
-            for g in _parts(shapely.union_all(merged["orange"])):
-                (keep if _area_km2(g) >= MIN_FRQ_KM2 else merged.setdefault("yellow", [])).append(g)
-                zs.setdefault("yellow", 3)
-            merged["orange"] = keep
+        # one item per polygon part; small FRQ cores -> OCNL; tiny parts dropped
+        items = []
+        for q, col, z, hs in dense:
+            for g in _parts(q):
+                if col == "orange" and _area_km2(g) < MIN_FRQ_KM2:
+                    col_g, z_g = "yellow", 3
+                else:
+                    col_g, z_g = col, z
+                if _area_km2(g) >= MIN_DENSE_KM2:
+                    items.append([g, col_g, z_g, set(hs)])
+        # dense parts are kept per period like the zones: parts of one colour are merged only
+        # when they are active in the same hours and lie within CLUSTER_DEG (one item = one label);
+        # a moving system keeps
+        # one item per period instead of one long swath
+        changed = True
+        while changed:
+            changed = False
+            for a_ in range(len(items)):
+                for b_ in range(a_ + 1, len(items)):
+                    A, B = items[a_], items[b_]
+                    if A[1] == B[1] and A[3] & B[3] and A[0].distance(B[0]) <= CLUSTER_DEG:
+                        A[0] = A[0].union(B[0]); A[2] = max(A[2], B[2]); A[3] |= B[3]
+                        items.pop(b_); changed = True
+                        break
+                if changed:
+                    break
+        dense_items = [tuple(t) for t in items]
+        for t in sorted(dense_items, key=lambda t: -t[0].area):
+            logger.debug(f"    dense item {t[1]:6s} {_area_km2(t[0]):7.0f} km2  {min(t[3]):%H}-{max(t[3]):%H}")
+        # drawing: one fill per colour, yellow with the orange cut out
         dense = []
-        for col, v in merged.items():
-            parts = [g for g in _parts(shapely.union_all(v)) if _area_km2(g) >= MIN_DENSE_KM2] if v else []
-            if parts:
-                dense.append((shapely.union_all(parts), col, zs[col]))
-
-        # yellow is not drawn under orange (overlap would look like a third, darker colour)
-        orange = next((t[0] for t in dense if t[1] == "orange"), None)
-        if orange is not None:
-            dense = [(t[0].difference(orange), t[1], t[2]) if t[1] == "yellow" else t for t in dense]
-            dense = [t for t in dense if not t[0].is_empty]
+        cu = {c: shapely.union_all([t[0] for t in dense_items if t[1] == c])
+              for c in ("yellow", "orange") if any(t[1] == c for t in dense_items)}
+        if "yellow" in cu and "orange" in cu:
+            cu["yellow"] = cu["yellow"].difference(cu["orange"])
+        for c, g in cu.items():
+            if not g.is_empty:
+                dense.append((g, c, 4 if c == "orange" else 3))
 
         inner = {"LOW": "MED", "MED": "HIGH"}
         unions = {k: shapely.union_all([q[0] for q in v]) if v else None for k, v in polys.items()}
@@ -553,11 +564,10 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
         # own labels for OCNL / FRQ parts: hours and FL of the dense part itself
         act_masks = {h: frames[h]["act"] for h in hours}
         labelled_frq = []
-        for q, col, z in sorted(dense, key=lambda t: -t[2]):      # orange first
-            parts = [x for x in ([q] if q.geom_type == "Polygon" else getattr(q, "geoms", []))
-                     if x.geom_type == "Polygon" and _area_km2(x) >= MIN_DENSE_KM2]
-            for g in _cluster(parts, CLUSTER_DEG):  # nearby parts of one colour share one label
-                win, fl = dense_info(g, act_masks, hours, frames, lat, lon,
+        for q, col, z, hs in sorted(dense_items, key=lambda t: (-t[2], -t[0].area)):   # orange first
+            for g in [q]:
+                item_hours = [h for h in hours if h in hs] or hours
+                win, fl = dense_info(g, act_masks, item_hours, frames, lat, lon,
                                      COV_FRQ if col == "orange" else COV_OCNL)
                 if not win:
                     continue
@@ -616,8 +626,11 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
             fill, edge = COLORS[col]
             polys_ = [q] if q.geom_type == "Polygon" else [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]
             for g in polys_:                    # path with holes (yellow has orange cut out of it)
-                _fill_with_holes(ax, g, proj, facecolor=fill, alpha=0.8, edgecolor=edge,
-                                 linewidth=1.0, zorder=z)
+                _fill_with_holes(ax, g, proj, facecolor=fill, alpha=0.8, edgecolor="none", zorder=z)
+        for q, col, z, hs in dense_items:       # outline per period, so each label has its polygon
+            for g in ([q] if q.geom_type == "Polygon" else [x for x in getattr(q, "geoms", []) if x.geom_type == "Polygon"]):
+                x, y = g.exterior.xy
+                ax.plot(x, y, color=COLORS[col][1], linewidth=1.0, transform=proj, zorder=4.2)
 
     # HIGH labels above the zone, MED below, LOW left; shifted until they do not overlap
     placed = []
