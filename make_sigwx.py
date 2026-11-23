@@ -287,7 +287,9 @@ DENSE_TRACK = True   # OCNL/FRQ followed as their own features (a moving band = 
 
 
 DENSE_WIN_H = 2      # OCNL/FRQ built in fixed 2-hour windows ...
-DENSE_MERGE = 0.5    # ... consecutive windows merged when they overlap at least this share (no movement)
+DENSE_MERGE = 0.75   # ... consecutive windows merged when they overlap at least this share (no movement)
+W2_OCNL = 0.30       # OCNL / FRQ thresholds on the 2-h window mean density
+W2_FRQ = 0.60
 
 
 def dense_tracked(frames, hours, lat, lon, polys):
@@ -303,7 +305,7 @@ def dense_tracked(frames, hours, lat, lon, polys):
         mean_d = sum(np.where(frames[h]["sig2"], uniform_filter(frames[h]["act"].astype(np.float32),
                                                                 size=DENS_WIN, mode="constant"), 0.0)
                      for h in hs) / len(hs)
-        for sub, col, z in ((mean_d >= COV_OCNL, "yellow", 3.5), (mean_d >= COV_FRQ, "orange", 4)):
+        for sub, col, z in ((mean_d >= W2_OCNL, "yellow", 3.5), (mean_d >= W2_FRQ, "orange", 4)):
             for q in get_polygons(sub, lat, lon, min_distance_deg=0.1, min_pixels=6):
                 if zone_u is not None:
                     q = q.intersection(zone_u)
