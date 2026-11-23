@@ -283,6 +283,41 @@ def _top(values):
     return fl if fl and fl >= MIN_CB_FL else None
 
 
+DENSE_TRACK = True   # OCNL/FRQ followed as their own features (a moving band = its own periods)
+DENSE_FRQ_H = 0.75   # FRQ on the hourly-density scale (hourly density runs higher than a zone mean)
+
+
+def dense_tracked(frames, hours, lat, lon, polys):
+    """OCNL/FRQ tracked on their own: hourly density of active cells, OCNL areas followed hour
+    by hour (same rules as the zones), FRQ inside each OCNL period. Cells count for a period
+    when they are dense in at least DENSE_SHARE of its hours, so a band moving through an area
+    does not paint its whole track."""
+    from scipy.ndimage import uniform_filter
+    zone_any = {h: frames[h]["sig2"] for h in hours}
+    dens_h = {h: np.where(zone_any[h], uniform_filter(frames[h]["act"].astype(np.float32),
+                                                       size=DENS_WIN, mode="constant"), 0.0)
+              for h in hours}
+    ocnl_h = {h: dens_h[h] >= COV_OCNL for h in hours}
+    zones = [q[0] for k in ("MED", "HIGH") for q in polys[k]]
+    zone_u = shapely.union_all(zones) if zones else None
+    out = []
+    for seg in track_segments(ocnl_h, hours, lat, lon):
+        hs = sorted(seg["hours"])
+        # mean density over the period of this OCNL feature (same thresholds as before)
+        mean_d = sum(dens_h[h] for h in hs) / len(hs)
+        foot = np.zeros_like(mean_d, dtype=bool)
+        for h in hs:
+            foot |= seg["masks"][h]
+        for cls, sub, col, z in (("OCNL", foot & (mean_d >= COV_OCNL), "yellow", 3),
+                                 ("FRQ", foot & (mean_d >= DENSE_FRQ_H), "orange", 4)):
+            for q in get_polygons(sub, lat, lon, min_distance_deg=0.1, min_pixels=6):
+                if zone_u is not None:
+                    q = q.intersection(zone_u)
+                if not q.is_empty and q.area > 0:
+                    out.append((q, col, z, frozenset(hs)))
+    return out
+
+
 def segment_info(seg, frames):
     """Window, FL (90th pct), union mask and max local density of active cells."""
     from scipy.ndimage import uniform_filter
@@ -478,6 +513,9 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                                           frozenset(seg["hours"])))
                 logger.info(f"  {b0:%d.%m %H}z block  {key:4s} {win}  {' '.join(parts)}  "
                             f"maxdens[LPI>=10/15/20/25]={calib(seg, frames)}")
+
+        if DENSE_TRACK:
+            dense = dense_tracked(frames, hours, lat, lon, polys)
 
         # same-level polygons that overlap at least half (of the smaller one) are merged:
         # one outline (union), period widened to cover both, higher FL
