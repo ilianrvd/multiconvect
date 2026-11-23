@@ -303,7 +303,7 @@ def dense_tracked(frames, hours, lat, lon, polys):
         mean_d = sum(np.where(frames[h]["sig2"], uniform_filter(frames[h]["act"].astype(np.float32),
                                                                 size=DENS_WIN, mode="constant"), 0.0)
                      for h in hs) / len(hs)
-        for sub, col, z in ((mean_d >= COV_OCNL, "yellow", 3), (mean_d >= COV_FRQ, "orange", 4)):
+        for sub, col, z in ((mean_d >= COV_OCNL, "yellow", 3.5), (mean_d >= COV_FRQ, "orange", 4)):
             for q in get_polygons(sub, lat, lon, min_distance_deg=0.1, min_pixels=6):
                 if zone_u is not None:
                     q = q.intersection(zone_u)
