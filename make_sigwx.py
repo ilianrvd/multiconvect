@@ -338,6 +338,33 @@ def poly_info(p, masks, hours, frames, lat, lon):
     return win, _top(tops)
 
 
+SECTOR_TOPS = None   # [(polygon, min FL)] from config/sectors.geojson + sigwx.sector_min_top
+
+
+def _load_sector_tops(cfg):
+    global SECTOR_TOPS
+    path = Path("config/sectors.geojson")
+    if not path.exists():
+        return
+    import sector_table as st
+    secs = st.load_sectors(path)
+    mt = st.min_tops(secs, (cfg.get("sigwx") or {}).get("sector_min_top"))
+    SECTOR_TOPS = [(g, mt[n]) for n, g in secs.items()]
+
+
+def _min_top_for(geom):
+    """Minimum TOP of the sector holding most of geom; outside all sectors: the nearest one."""
+    best, best_a = None, 0.0
+    for g, fl in SECTOR_TOPS:
+        a = geom.intersection(g).area
+        if a > best_a:
+            best, best_a = fl, a
+    if best is None:
+        c = geom.representative_point()
+        best = min(SECTOR_TOPS, key=lambda t: t[0].distance(c))[1]
+    return best
+
+
 def dense_info(p, masks, hours, frames, lat, lon, share):
     """Window and FL of an OCNL/FRQ part: only the hours in which active cells
     cover at least `share` of the part (else the single densest hour)."""
@@ -547,6 +574,22 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                 if changed:
                     break
         dense_items = [tuple(t) for t in items]
+        # CB density shown only where the CB reach the traffic: an OCNL/FRQ part stays only if
+        # its top (FL, as in its label) reaches the minimum TOP of the sector it mostly lies in
+        # (sigwx.sector_min_top: Istanbul low, bordering sectors middle, north/west high;
+        # outside the sectors the nearest sector's value). Parts below stay as their green zone.
+        if SECTOR_TOPS is not None:
+            act_m = {h: frames[h]["act"] for h in hours}
+            kept = []
+            for t in dense_items:
+                _w, fl_t = dense_info(t[0], act_m, [h for h in hours if h in t[3]] or hours, frames, lat, lon,
+                                      COV_FRQ if t[1] == "orange" else COV_OCNL)
+                need = _min_top_for(t[0])
+                if fl_t is not None and fl_t >= need:
+                    kept.append(t)
+                else:
+                    logger.info(f"    {t[1]} part {_area_km2(t[0]):.0f} km2 dropped: FL{fl_t} < FL{need}")
+            dense_items = kept
         for t in sorted(dense_items, key=lambda t: -t[0].area):
             logger.debug(f"    dense item {t[1]:6s} {_area_km2(t[0]):7.0f} km2  {min(t[3]):%H}-{max(t[3]):%H}")
         # drawing: one fill per colour, yellow with the orange cut out
@@ -761,6 +804,7 @@ def main():
     sw = cfg.get("sigwx", {})
     COV_OCNL = sw.get("ocnl", COV_OCNL)
     GRADED = bool(sw.get("graded", GRADED))
+    _load_sector_tops(cfg)
     COV_FRQ = sw.get("frq", COV_FRQ)
     ACT_LPI = sw.get("act_lpi", ACT_LPI)
     logger.info(f"SIGWX density: active = LPI>={ACT_LPI} + GFS/IFS, OCNL>={COV_OCNL:.0%}, FRQ>={COV_FRQ:.0%}")
