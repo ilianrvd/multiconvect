@@ -51,6 +51,7 @@ jobs:
           python make_gallery.py
           curl -sf "https://ilianrvd.github.io/multiconvect/sigwx/${SECTORS_NAME:-sectors}_state.json" -o prev_sectors_state.json || true
           python make_sigwx.py
+          python tools/airports_json.py docs/airports.json
         env:
           SECTORS_NAME: ${{ secrets.SECTORS_NAME }}
 
