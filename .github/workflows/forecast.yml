@@ -74,5 +74,15 @@ jobs:
         with:
           path: docs
 
+      # GitHub sometimes cannot find the just-uploaded artifact (artifact metadata lag);
+      # a second attempt after a pause has always worked (rerun 24.11)
       - id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - if: steps.deploy.outcome == 'failure'
+        run: sleep 90
+
+      - id: deploy2
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
