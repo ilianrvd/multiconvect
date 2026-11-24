@@ -174,6 +174,15 @@ def _win_span(win):
     return a, (b + 24 if b <= a else b)
 
 
+MED_ADJ_SHARE = 0.5  # MED periods following each other are merged above this overlap
+
+
+def _win_adjacent(w1, w2):
+    a0, a1 = _win_span(w1)
+    b0, b1 = _win_span(w2)
+    return a1 == b0 or b1 == a0 or _win_overlap(w1, w2)
+
+
 def _win_overlap(w1, w2):
     a0, a1 = _win_span(w1)
     b0, b1 = _win_span(w2)
@@ -525,8 +534,12 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
                         # consecutive periods of a moving zone stay separate
                         # touching (or overlapping) zones active at the same time, or one almost
                         # entirely inside the other; consecutive periods of a moving zone stay separate
+                        # MED (light green): consecutive periods that mostly overlap are one
+                        # zone that hardly moved - not worth two outlines
+                        med_adj = (key == "MED" and share >= MED_ADJ_SHARE
+                                   and _win_adjacent(a[1], b[1]))
                         if ((_win_overlap(a[1], b[1]) and a[0].distance(b[0]) <= TOUCH_DEG)
-                                or share >= NEST_SHARE):
+                                or share >= NEST_SHARE or med_adj):
                             a[0] = a[0].union(b[0])
                             a[1] = _merge_win(a[1], b[1])
                             a[2] = max([x for x in (a[2], b[2]) if x] or [None])
