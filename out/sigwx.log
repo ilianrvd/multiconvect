@@ -1,0 +1,9 @@
+17:21:31  SIGWX density: active = LPI>=20 + GFS/IFS, OCNL>=40%, FRQ>=70%
+17:21:31    24.11 12z block  MED  13-15  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=6%/5%/0%/0%
+17:21:31    24.11 12z block  MED  15-18  OCNL=0% FRQ=0%  maxdens[LPI>=10/15/20/25]=23%/7%/0%/0%
+/home/runner/micromamba/envs/mc/lib/python3.11/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_coastline.zip
+  warnings.warn(f'Downloading: {url}', DownloadWarning)
+17:21:33  SIGWX saved: sigwx_1.png  (2 labels)
+17:21:33  SIGWX saved: sigwx_2.png  (0 labels)
+17:21:33  Sector min TOP: SA 250, SB 250, SC 250, SD 220, SE 220, SF 220, VA 250, VC 220, VB 250, VD 220, I-WEST 180, I-EAST 180
+17:21:33  Sector table: 24.11.2026, 25.11.2026

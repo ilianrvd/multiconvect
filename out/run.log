@@ -1,0 +1,132 @@
+17:20:13  INFO     Failed to extract font properties from /usr/share/fonts/truetype/noto/NotoColorEmoji.ttf: In FT2Font: Could not set the fontsize (invalid pixel size; error code 0x17)
+17:20:13  INFO     generated new fontManager
+17:20:13  INFO     Run: 2026-11-24 12z  F000
+17:20:13  INFO     [1/4] Downloading ...
+17:20:14  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_000_LPI_CON_MAX.grib2.bz2
+17:20:16  INFO     [ICON] Done: icon_lpi_20261124_12z_f000.grib2
+17:20:27  INFO     [IFS] F000 taken from older run 2026-11-24 06z
+17:20:27  INFO     [2/4] Reading ...
+17:20:27  INFO     [ICON] LPI: max=5.91 J/kg
+17:20:29  INFO     [IFS] CP rate (3h mean): max=0.57 mm/h
+17:20:29  INFO     [3/4] Regridding ...
+17:20:29  INFO       HIGH=0  MED=0  LOW=0 pixels
+17:20:29  INFO     [4/4] Building polygons ...
+17:20:29  INFO       HIGH=0 poly  MED=0  LOW=0
+17:20:29  INFO       Density: OCNL=0 pixels
+17:20:30  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_000_HTOP_CON.grib2.bz2
+17:20:31  INFO     [ICON] Done: icon_htop_con_20261124_12z_f000.grib2
+17:20:35  INFO     Map saved: convection_20261124_12z_f000.png
+17:20:35  INFO     Run: 2026-11-24 12z  F001
+17:20:35  INFO     [1/4] Downloading ...
+17:20:35  INFO     [GFS] Downloading CPRAT F001 ...
+17:20:36  INFO     [GFS] Done: gfs_20261124_12z_f001_cprat.grib2
+17:20:37  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_001_LPI_CON_MAX.grib2.bz2
+17:20:38  INFO     [ICON] Done: icon_lpi_20261124_12z_f001.grib2
+17:20:40  INFO     [IFS] F001 taken from older run 2026-11-24 06z
+17:20:40  INFO     [2/4] Reading ...
+17:20:40  INFO     [ICON] LPI: max=20.44 J/kg
+17:20:41  INFO     [IFS] CP rate (3h mean): max=0.57 mm/h
+17:20:41  INFO     [3/4] Regridding ...
+17:20:41  INFO     [GFS] CPRAT: max=0.77 mm/h
+17:20:41  INFO       HIGH=0  MED=2  LOW=117 pixels
+17:20:41  INFO     [4/4] Building polygons ...
+17:20:41  INFO       HIGH=0 poly  MED=0  LOW=1
+17:20:41  INFO       Density: OCNL=0 pixels
+17:20:43  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_001_HTOP_CON.grib2.bz2
+17:20:44  INFO     [ICON] Done: icon_htop_con_20261124_12z_f001.grib2
+17:20:44  INFO     Map saved: convection_20261124_12z_f001.png
+17:20:44  INFO     Run: 2026-11-24 12z  F002
+17:20:44  INFO     [1/4] Downloading ...
+17:20:44  INFO     [GFS] Downloading CPRAT F002 ...
+17:20:45  INFO     [GFS] Done: gfs_20261124_12z_f002_cprat.grib2
+17:20:46  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_002_LPI_CON_MAX.grib2.bz2
+17:20:47  INFO     [ICON] Done: icon_lpi_20261124_12z_f002.grib2
+17:20:50  INFO     [IFS] F002 taken from older run 2026-11-24 06z
+17:20:50  INFO     [2/4] Reading ...
+17:20:50  INFO     [ICON] LPI: max=19.93 J/kg
+17:20:50  INFO     [IFS] CP rate (3h mean): max=0.57 mm/h
+17:20:50  INFO     [3/4] Regridding ...
+17:20:50  INFO     [GFS] CPRAT: max=0.67 mm/h
+17:20:50  INFO       HIGH=0  MED=9  LOW=262 pixels
+17:20:50  INFO     [4/4] Building polygons ...
+17:20:50  INFO       HIGH=0 poly  MED=0  LOW=1
+17:20:50  INFO       Density: OCNL=0 pixels
+17:20:51  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_002_HTOP_CON.grib2.bz2
+17:20:52  INFO     [ICON] Done: icon_htop_con_20261124_12z_f002.grib2
+17:20:53  INFO     Map saved: convection_20261124_12z_f002.png
+17:20:53  INFO     Run: 2026-11-24 12z  F003
+17:20:53  INFO     [1/4] Downloading ...
+17:20:53  INFO     [GFS] Downloading CPRAT F003 ...
+17:20:54  INFO     [GFS] Done: gfs_20261124_12z_f003_cprat.grib2
+17:20:54  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_003_LPI_CON_MAX.grib2.bz2
+17:20:56  INFO     [ICON] Done: icon_lpi_20261124_12z_f003.grib2
+17:20:57  INFO     [IFS] F003 taken from older run 2026-11-24 06z
+17:20:57  INFO     [2/4] Reading ...
+17:20:57  INFO     [ICON] LPI: max=16.43 J/kg
+17:20:58  INFO     [IFS] CP rate (3h mean): max=0.57 mm/h
+17:20:58  INFO     [3/4] Regridding ...
+17:20:58  INFO     [GFS] CPRAT: max=0.71 mm/h
+17:20:58  INFO       HIGH=0  MED=7  LOW=277 pixels
+17:20:58  INFO     [4/4] Building polygons ...
+17:20:58  INFO       HIGH=0 poly  MED=0  LOW=1
+17:20:58  INFO       Density: OCNL=0 pixels
+17:20:58  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_003_HTOP_CON.grib2.bz2
+17:21:00  INFO     [ICON] Done: icon_htop_con_20261124_12z_f003.grib2
+17:21:00  INFO     Map saved: convection_20261124_12z_f003.png
+17:21:00  INFO     Run: 2026-11-24 12z  F004
+17:21:00  INFO     [1/4] Downloading ...
+17:21:00  INFO     [GFS] Downloading CPRAT F004 ...
+17:21:02  INFO     [GFS] Done: gfs_20261124_12z_f004_cprat.grib2
+17:21:02  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_004_LPI_CON_MAX.grib2.bz2
+17:21:03  INFO     [ICON] Done: icon_lpi_20261124_12z_f004.grib2
+17:21:06  INFO     [IFS] F004 taken from older run 2026-11-24 06z
+17:21:06  INFO     [2/4] Reading ...
+17:21:06  INFO     [ICON] LPI: max=12.07 J/kg
+17:21:06  INFO     [IFS] CP rate (3h mean): max=1.14 mm/h
+17:21:06  INFO     [3/4] Regridding ...
+17:21:06  INFO     [GFS] CPRAT: max=0.79 mm/h
+17:21:06  INFO       HIGH=0  MED=36  LOW=288 pixels
+17:21:06  INFO     [4/4] Building polygons ...
+17:21:06  INFO       HIGH=0 poly  MED=1  LOW=3
+17:21:06  INFO       Density: OCNL=0 pixels
+17:21:07  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_004_HTOP_CON.grib2.bz2
+17:21:08  INFO     [ICON] Done: icon_htop_con_20261124_12z_f004.grib2
+17:21:08  INFO     Map saved: convection_20261124_12z_f004.png
+17:21:08  INFO     Run: 2026-11-24 12z  F005
+17:21:08  INFO     [1/4] Downloading ...
+17:21:08  INFO     [GFS] Downloading CPRAT F005 ...
+17:21:10  INFO     [GFS] Done: gfs_20261124_12z_f005_cprat.grib2
+17:21:10  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_005_LPI_CON_MAX.grib2.bz2
+17:21:11  INFO     [ICON] Done: icon_lpi_20261124_12z_f005.grib2
+17:21:13  INFO     [IFS] F005 taken from older run 2026-11-24 06z
+17:21:13  INFO     [2/4] Reading ...
+17:21:13  INFO     [ICON] LPI: max=16.64 J/kg
+17:21:13  INFO     [IFS] CP rate (3h mean): max=1.14 mm/h
+17:21:13  INFO     [3/4] Regridding ...
+17:21:13  INFO     [GFS] CPRAT: max=0.69 mm/h
+17:21:13  INFO       HIGH=12  MED=67  LOW=225 pixels
+17:21:13  INFO     [4/4] Building polygons ...
+17:21:13  INFO       HIGH=0 poly  MED=1  LOW=1
+17:21:13  INFO       Density: OCNL=0 pixels
+17:21:14  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_005_HTOP_CON.grib2.bz2
+17:21:15  INFO     [ICON] Done: icon_htop_con_20261124_12z_f005.grib2
+17:21:16  INFO     Map saved: convection_20261124_12z_f005.png
+17:21:16  INFO     Run: 2026-11-24 12z  F006
+17:21:16  INFO     [1/4] Downloading ...
+17:21:16  INFO     [GFS] Downloading CPRAT F006 ...
+17:21:17  INFO     [GFS] Done: gfs_20261124_12z_f006_cprat.grib2
+17:21:17  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_006_LPI_CON_MAX.grib2.bz2
+17:21:18  INFO     [ICON] Done: icon_lpi_20261124_12z_f006.grib2
+17:21:27  INFO     [IFS] F006 taken from older run 2026-11-24 06z
+17:21:27  INFO     [2/4] Reading ...
+17:21:27  INFO     [ICON] LPI: max=16.98 J/kg
+17:21:28  INFO     [IFS] CP rate (3h mean): max=1.14 mm/h
+17:21:28  INFO     [3/4] Regridding ...
+17:21:28  INFO     [GFS] CPRAT: max=0.79 mm/h
+17:21:28  INFO       HIGH=49  MED=78  LOW=204 pixels
+17:21:28  INFO     [4/4] Building polygons ...
+17:21:28  INFO       HIGH=1 poly  MED=1  LOW=2
+17:21:28  INFO       Density: OCNL=0 pixels
+17:21:29  INFO     [ICON] Downloading icon-eu_europe_regular-lat-lon_single-level_2026112412_006_HTOP_CON.grib2.bz2
+17:21:30  INFO     [ICON] Done: icon_htop_con_20261124_12z_f006.grib2
+17:21:30  INFO     Map saved: convection_20261124_12z_f006.png
