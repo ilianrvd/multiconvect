@@ -125,6 +125,32 @@ def build_rows(grids, points, run_dt, fmax):
     return rows
 
 
+def build_json(rows, generated_at):
+    """latest_points.json (docs/archive_points.md): one run, per point a series by hour."""
+    runs = {r["run"] for r in rows}
+    if len(runs) != 1:
+        raise ValueError(f"expected one run, got {runs}")
+    points = {}
+    for r in rows:
+        p = points.setdefault(r["point"], {"id": r["point"], "model_elev_m": r["model_elev_m"], "series": []})
+        if p["model_elev_m"] is None:
+            p["model_elev_m"] = r["model_elev_m"]
+        p["series"].append({"valid": r["valid"], "lead_h": r["lead_h"], "t": r["t"], "td": r["td"],
+                            "wind_kt": r["wind_kt"], "wind_dir": r["wind_dir"],
+                            "cloud_low_pct": r["cloud_low_pct"]})
+    return {"generated_at": generated_at, "source": "MultiConvect", "run": runs.pop(), "model": "icon_eu",
+            "units": {"t": "degC", "td": "degC", "wind_kt": "kt", "wind_dir": "deg",
+                      "cloud_low_pct": "%", "model_elev_m": "m"},
+            "points": list(points.values())}
+
+
+def write_json(rows, path):
+    import json
+    gen = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(build_json(rows, gen), f, ensure_ascii=False, separators=(",", ":"))
+
+
 def write_csv(rows, path):
     with open(path, "w", newline="") as f:
         w = csv.writer(f, lineterminator="\n")
@@ -139,6 +165,7 @@ def main():
     ap.add_argument("--date"); ap.add_argument("--run", type=int)
     ap.add_argument("--fmax", type=int, default=30)
     ap.add_argument("--out", default="points_rows.csv")
+    ap.add_argument("--json", help="also write latest_points.json to this path")
     ap.add_argument("--data", default="data/points_icon")
     a = ap.parse_args()
     if a.date is None or a.run is None:
@@ -156,6 +183,9 @@ def main():
     run_dt = datetime.strptime(f"{a.date} {a.run:02d}", "%Y-%m-%d %H").replace(tzinfo=timezone.utc)
     rows = build_rows(grids, pts, run_dt, a.fmax)
     write_csv(rows, a.out)
+    if a.json:
+        write_json(rows, a.json)
+        logger.info(f"latest_points.json -> {a.json}")
     empty = sum(1 for r in rows if r["t"] is None)
     logger.info(f"{len(rows)} rows ({len(pts)} points x {a.fmax + 1} h), rows without t: {empty} -> {a.out}")
     if empty == len(rows):
