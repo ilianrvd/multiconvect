@@ -29,13 +29,16 @@ jobs:
         run: |
           args=""
           if [ -n "${{ inputs.date }}" ] && [ -n "${{ inputs.hour }}" ]; then args="--date ${{ inputs.date }} --run ${{ inputs.hour }}"; fi
-          python tools/points_run.py $args --out points_rows.csv
+          python tools/points_run.py $args --out points_rows.csv --json latest_points.json
+          ls -l latest_points.json
           wc -l points_rows.csv
           gzip -k points_rows.csv
       - uses: actions/upload-artifact@v4
         with:
           name: points_rows
-          path: points_rows.csv.gz
+          path: |
+            points_rows.csv.gz
+            latest_points.json
       - name: Archive to branch archive-points
         shell: bash -l {0}
         env:
