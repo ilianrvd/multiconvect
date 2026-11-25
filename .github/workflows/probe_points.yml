@@ -1,0 +1,18 @@
+name: Probe ICON-EU point fields (not published)
+on:
+  workflow_dispatch:
+    inputs:
+      date: {description: "Run date YYYY-MM-DD", required: true}
+      hour: {description: "Run hour (00/06/12/18)", required: true, default: "12"}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: mc
+          create-args: python=3.11 xarray cfgrib eccodes numpy requests
+      - name: Probe
+        shell: bash -l {0}
+        run: python tools/probe_points.py ${{ inputs.date }} ${{ inputs.hour }}
