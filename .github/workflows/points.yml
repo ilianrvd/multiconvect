@@ -1,16 +1,22 @@
-name: ICON-EU point values (not published)
+name: ICON-EU point archive
+# Separate from forecast.yml on purpose: a failure here never affects SIGWX / Pages.
+# Starts after "Convective Forecast" finishes (any result except cancelled), or by hand.
 on:
+  workflow_run:
+    workflows: ["Convective Forecast"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       date: {description: "Run date YYYY-MM-DD (empty = latest complete run)", required: false}
       hour: {description: "Run hour 00/06/12/18 (empty = latest complete run)", required: false}
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: points
   cancel-in-progress: false
 jobs:
   points:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +30,38 @@ jobs:
           args=""
           if [ -n "${{ inputs.date }}" ] && [ -n "${{ inputs.hour }}" ]; then args="--date ${{ inputs.date }} --run ${{ inputs.hour }}"; fi
           python tools/points_run.py $args --out points_rows.csv
-          head -4 points_rows.csv; wc -l points_rows.csv; gzip -k points_rows.csv; ls -l points_rows.csv.gz
+          wc -l points_rows.csv
+          gzip -k points_rows.csv
       - uses: actions/upload-artifact@v4
         with:
           name: points_rows
           path: points_rows.csv.gz
+      - name: Archive to branch archive-points
+        shell: bash -l {0}
+        env:
+          REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          if git ls-remote --exit-code --heads "$REMOTE" archive-points >/dev/null; then
+            git clone --quiet --depth 1 --branch archive-points "$REMOTE" arch
+          else
+            git init --quiet -b archive-points arch
+            git -C arch remote add origin "$REMOTE"
+            printf '# archive-points\n\nOnly data. Format: docs/archive_points.md in ilianrvd/fogNowcast.\nOne file per run month: archive/YYYY-MM.csv.gz (append-only, 6 months kept).\n' > arch/README.md
+          fi
+          RUN=$(sed -n 2p points_rows.csv | cut -d, -f1)
+          python tools/archive_points.py --rows points_rows.csv --dir arch/archive | tee archive_result.txt
+          cd arch
+          if [ -z "$(git status --porcelain)" ]; then echo "Nothing new for run $RUN"; exit 0; fi
+          git add -A
+          git commit --quiet -m "Run $RUN"
+          if grep -q '^new_month=true' ../archive_result.txt; then
+            # a new month file appeared: squash the whole branch into one commit (content unchanged)
+            git checkout --quiet --orphan squashed
+            git add -A
+            git commit --quiet -m "Archive up to $RUN (history squashed)"
+            git push --force origin squashed:archive-points
+          else
+            git push origin archive-points || { git pull --rebase origin archive-points && git push origin archive-points; }
+          fi
