@@ -51,7 +51,7 @@ jobs:
           else
             git init --quiet -b archive-points arch
             git -C arch remote add origin "$REMOTE"
-            printf '# archive-points\n\nOnly data. Format: docs/archive_points.md in ilianrvd/fogNowcast.\nOne file per run month: archive/YYYY-MM.csv.gz (append-only, 6 months kept).\n' > arch/README.md
+            printf '# archive-points\n\nOnly data. Format: docs/archive_points.md in ilianrvd/fogNowcast.\nOne file per run month: archive/YYYY-MM.csv.gz (append-only, nothing is deleted).\n' > arch/README.md
           fi
           RUN=$(sed -n 2p points_rows.csv | cut -d, -f1)
           python tools/archive_points.py --rows points_rows.csv --dir arch/archive | tee archive_result.txt
@@ -59,12 +59,13 @@ jobs:
           if [ -z "$(git status --porcelain)" ]; then echo "Nothing new for run $RUN"; exit 0; fi
           git add -A
           git commit --quiet -m "Run $RUN"
-          if grep -q '^new_month=true' ../archive_result.txt; then
-            # a new month file appeared: squash the whole branch into one commit (content unchanged)
-            git checkout --quiet --orphan squashed
-            git add -A
-            git commit --quiet -m "Archive up to $RUN (history squashed)"
-            git push --force origin squashed:archive-points
-          else
-            git push origin archive-points || { git pull --rebase origin archive-points && git push origin archive-points; }
-          fi
+          git push origin archive-points || { git pull --rebase origin archive-points && git push origin archive-points; }
+
+      # Separate step: starts only if the write above finished successfully (default `if: success()`).
+      - name: Squash branch archive-points (guarded, monthly)
+        shell: bash -l {0}
+        env:
+          REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}
+        run: |
+          MONTH=$(sed -n 2p points_rows.csv | cut -c1-7)
+          python tools/squash_archive.py --dir arch --remote "$REMOTE" --month "$MONTH"
