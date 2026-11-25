@@ -1,0 +1,31 @@
+name: ICON-EU point values (not published)
+on:
+  workflow_dispatch:
+    inputs:
+      date: {description: "Run date YYYY-MM-DD (empty = latest complete run)", required: false}
+      hour: {description: "Run hour 00/06/12/18 (empty = latest complete run)", required: false}
+permissions:
+  contents: read
+concurrency:
+  group: points
+  cancel-in-progress: false
+jobs:
+  points:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: mc
+          create-args: python=3.11 xarray cfgrib eccodes numpy requests
+      - name: Extract
+        shell: bash -l {0}
+        run: |
+          args=""
+          if [ -n "${{ inputs.date }}" ] && [ -n "${{ inputs.hour }}" ]; then args="--date ${{ inputs.date }} --run ${{ inputs.hour }}"; fi
+          python tools/points_run.py $args --out points_rows.csv
+          head -4 points_rows.csv; wc -l points_rows.csv; gzip -k points_rows.csv; ls -l points_rows.csv.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: points_rows
+          path: points_rows.csv.gz
