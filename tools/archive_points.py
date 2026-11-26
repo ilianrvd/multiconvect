@@ -2,19 +2,17 @@
 
 Append-only: new rows are added as a new gzip member, existing rows are never changed. A row is identified by
 (run, valid, point, model); rows already present are skipped, so re-running the same run adds nothing.
-Months older than KEEP_MONTHS (counting the current one) are deleted.
-Prints `new_month=true|false` and `added=<n>` for the workflow.
+Nothing is ever deleted (decision 2026-11-25). Squashing the branch is a separate guarded step: tools/squash_archive.py.
+Prints `added=<n>` and `new_month=true|false`.
 """
 import argparse
 import csv
 import gzip
 import io
-import re
 from pathlib import Path
 
 COLUMNS = ["run", "valid", "lead_h", "point", "model", "t", "td", "wind_kt", "wind_dir",
            "cloud_low_pct", "model_elev_m"]
-KEEP_MONTHS = 6
 
 
 def read_rows(path):
@@ -24,11 +22,6 @@ def read_rows(path):
 
 def key(r):
     return (r["run"], r["valid"], r["point"], r["model"])
-
-
-def month_index(ym):
-    y, m = ym.split("-")
-    return int(y) * 12 + int(m) - 1
 
 
 def append_rows(new_rows, archive_dir):
@@ -56,17 +49,6 @@ def append_rows(new_rows, archive_dir):
     return len(fresh), created and bool(fresh), month
 
 
-def prune(archive_dir, current_month):
-    removed = []
-    cur = month_index(current_month)
-    for p in sorted(archive_dir.glob("*.csv.gz")):
-        m = re.fullmatch(r"(\d{4}-\d{2})\.csv\.gz", p.name)
-        if m and cur - month_index(m.group(1)) >= KEEP_MONTHS:
-            p.unlink()
-            removed.append(p.name)
-    return removed
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", required=True, help="CSV from tools/points_run.py")
@@ -83,10 +65,8 @@ def main():
     missing = [key(r) for r in rows if key(r) not in back]
     if missing:
         raise SystemExit(f"archive verification failed, {len(missing)} rows missing")
-    removed = prune(d, month)
     print(f"added={added}")
     print(f"new_month={'true' if new_month else 'false'}")
-    print(f"removed={','.join(removed)}")
 
 
 if __name__ == "__main__":
