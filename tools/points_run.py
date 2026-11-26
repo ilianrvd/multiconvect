@@ -139,7 +139,8 @@ def build_json(rows, generated_at):
         p["series"].append({"valid": r["valid"], "lead_h": r["lead_h"], "t": r["t"], "td": r["td"],
                             "wind_kt": r["wind_kt"], "wind_dir": r["wind_dir"],
                             "cloud_low_pct": r["cloud_low_pct"]})
-    return {"generated_at": generated_at, "source": "MultiConvect", "run": runs.pop(), "model": "icon_eu",
+    return {"schema": "multiconvect.latest_points/1.0", "generated_at": generated_at, "source": "MultiConvect",
+            "run": runs.pop(), "cadence_min": 360, "model": "icon_eu",
             "units": {"t": "degC", "td": "degC", "wind_kt": "kt", "wind_dir": "deg",
                       "cloud_low_pct": "%", "model_elev_m": "m"},
             "points": list(points.values())}

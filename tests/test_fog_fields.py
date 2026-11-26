@@ -104,6 +104,15 @@ def test_run_equals_latest_points_run():
     assert m["generated_at"] == js["generated_at"]
 
 
+def test_latest_points_header():
+    rows = pr.build_rows(make_grids(), [("LBSF", 42.7, 23.4, 531)], RUN, FMAX)
+    js = pr.build_json(rows, "2026-11-26T10:59:36Z")
+    assert list(js)[:5] == ["schema", "generated_at", "source", "run", "cadence_min"]
+    assert js["schema"] == "multiconvect.latest_points/1.0" and js["cadence_min"] == 360
+    assert {"model", "units", "points"} <= set(js)                  # old keys stay
+    assert js["points"][0]["series"][0]["wind_kt"] is not None
+
+
 def test_write_files_atomic_and_readable():
     a, _i, m = build()
     with tempfile.TemporaryDirectory() as d:
