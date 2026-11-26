@@ -23,14 +23,13 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           environment-name: mc
-          create-args: python=3.11 xarray cfgrib eccodes numpy requests pyyaml
+          create-args: python=3.11 xarray cfgrib eccodes numpy requests
       - name: Extract
         shell: bash -l {0}
         run: |
           args=""
           if [ -n "${{ inputs.date }}" ] && [ -n "${{ inputs.hour }}" ]; then args="--date ${{ inputs.date }} --run ${{ inputs.hour }}"; fi
-          python tools/points_run.py $args --out points_rows.csv --json latest_points.json --fog-dir fog_out
-          ls -l fog_out
+          python tools/points_run.py $args --out points_rows.csv --json latest_points.json
           ls -l latest_points.json
           wc -l points_rows.csv
           gzip -k points_rows.csv
@@ -40,7 +39,6 @@ jobs:
           path: |
             points_rows.csv.gz
             latest_points.json
-            fog_out/*
       - name: Archive to branch archive-points
         shell: bash -l {0}
         env:
