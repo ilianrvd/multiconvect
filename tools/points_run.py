@@ -18,6 +18,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import point_extract as pe  # noqa: E402
+import fog_fields as ff  # noqa: E402
 
 logger = logging.getLogger("points_run")
 RAW = "https://raw.githubusercontent.com/ilianrvd/fogNowcast/main/static/"
@@ -144,9 +145,9 @@ def build_json(rows, generated_at):
             "points": list(points.values())}
 
 
-def write_json(rows, path):
+def write_json(rows, path, gen=None):
     import json
-    gen = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    gen = gen or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(build_json(rows, gen), f, ensure_ascii=False, separators=(",", ":"))
 
@@ -166,6 +167,7 @@ def main():
     ap.add_argument("--fmax", type=int, default=30)
     ap.add_argument("--out", default="points_rows.csv")
     ap.add_argument("--json", help="also write latest_points.json to this path")
+    ap.add_argument("--fog-dir", help="also write fog_fields_icon_eu.npz and fog_fields_meta.json to this directory")
     ap.add_argument("--data", default="data/points_icon")
     a = ap.parse_args()
     if a.date is None or a.run is None:
@@ -183,13 +185,26 @@ def main():
     run_dt = datetime.strptime(f"{a.date} {a.run:02d}", "%Y-%m-%d %H").replace(tzinfo=timezone.utc)
     rows = build_rows(grids, pts, run_dt, a.fmax)
     write_csv(rows, a.out)
+    gen = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if a.json:
-        write_json(rows, a.json)
+        write_json(rows, a.json, gen)
         logger.info(f"latest_points.json -> {a.json}")
+    fog_failed = False
+    if a.fog_dir:
+        try:
+            # grids keyed by DWD field name, same files that gave the point rows (no extra download)
+            arrays, info = ff.build_arrays(grids, run_dt, a.fmax, ff.load_domain())
+            npz, meta = ff.write_files(a.fog_dir, arrays, ff.build_meta(run_dt, gen, info))
+            logger.info(f"fog fields -> {npz} ({npz.stat().st_size / 1e6:.2f} MB), {meta}")
+        except Exception as e:  # independent of latest_points.json; the step still fails visibly
+            logger.error(f"fog fields not written: {e}")
+            fog_failed = True
     empty = sum(1 for r in rows if r["t"] is None)
     logger.info(f"{len(rows)} rows ({len(pts)} points x {a.fmax + 1} h), rows without t: {empty} -> {a.out}")
     if empty == len(rows):
         sys.exit("no values extracted")
+    if fog_failed:
+        sys.exit("fog fields failed")
 
 
 if __name__ == "__main__":
