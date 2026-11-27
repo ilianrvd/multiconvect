@@ -1,5 +1,5 @@
 name: ICON-EU point archive
-# Separate from forecast.yml on purpose: a failure here never affects SIGWX / Pages.
+# Separate from forecast.yml on purpose: a failure here never affects the convection maps / Pages.
 # Starts after "Convective Forecast" finishes (any result except cancelled), or by hand.
 on:
   workflow_run:

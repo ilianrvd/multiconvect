@@ -27,5 +27,5 @@ for name, m in regions.items():
     print(name, len(g.exterior.coords), "pts", f"{g.area * 111 * 111 * np.cos(np.radians(g.centroid.y)):.0f} km2",
           f"centroid {g.centroid.y:.2f}N {g.centroid.x:.2f}E")
 json.dump({"type": "FeatureCollection",
-           "properties": {"source": "digitised from BULATSA FIR SIGWX map screenshot, approx. +-5 km; replace with Eurocontrol sector data"},
+           "properties": {"source": "digitised from an ACC sector map screenshot, approx. +-5 km; replace with Eurocontrol sector data"},
            "features": feats}, open("/home/claude/sectors/sectors.geojson", "w"), indent=1)

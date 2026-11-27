@@ -1,7 +1,7 @@
 """
 sector_table.py
 Per ACC sector and 6-hour block: TIME, TOP FL and coverage % with ISOL / OCNL / FRQ,
-in the layout of the BULATSA FIR SIGWX sector form. ISOL counts HIGH ISOL only.
+as a sector table (TIME, TOP FL, ISOL / OCNL / FRQ %). ISOL counts HIGH ISOL only.
 Sector polygons: config/sectors.geojson (digitised, approximate).
 """
 import json
@@ -52,7 +52,7 @@ def min_tops(sectors, cfg_tops=None):
 
 
 def block_rows(frames, geoms, b0, sectors, hh, to_fl, min_fl=100, min_top=None):
-    """geoms: {'HIGH': geom|None, 'OCNL': geom|None, 'FRQ': geom|None} of the drawn SIGWX block."""
+    """geoms: {'HIGH': geom|None, 'OCNL': geom|None, 'FRQ': geom|None} of the drawn 6-hour block."""
     hours = [h for h in (b0 + timedelta(hours=i) for i in range(6)) if h in frames]
     rows = {}
     if not hours:
@@ -118,7 +118,7 @@ def write_xlsx(state, out_path):
     fills = {c: PatternFill("solid", fgColor=v.lstrip("#")) for c, v in COLOURS.items()}
     for day, blocks in state.items():
         ws = wb.create_sheet(day.replace(".", "-"))
-        ws.append(["СЕКТОР", "карта FIR-SIGWX", "период (хх-хх)", "TOP FL (xxx)",
+        ws.append(["СЕКТОР", "карта с шестчасови полигони", "период (хх-хх)", "TOP FL (xxx)",
                    "Процентно запълване с ISOL/OCNL/FRQ (xx)", None, None, "RUN"])
         ws.merge_cells(start_row=1, start_column=5, end_row=1, end_column=7)
         for fs, names in ORDER.items():
