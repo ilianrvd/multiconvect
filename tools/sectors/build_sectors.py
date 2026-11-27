@@ -1,4 +1,4 @@
-"""Digitise BULATSA ACC sectors from the FIR SIGWX map screenshot (approximate).
+"""Digitise ACC sectors from a sector map screenshot (approximate).
 Georeference by airports (LCC + affine), barriers = blue sector/FIR lines + manual
 segments closing gaps, regions by flood fill from the sector label points."""
 import json, sys

@@ -57,7 +57,7 @@ jobs:
 
       # Latest ICON-EU run at the 26 fogNowcast points (docs/archive_points.md in ilianrvd/fogNowcast)
       # and as grid fields (docs/fog_fields.md). Same run, same downloaded files, one extra write.
-      # Independent: if it fails the site is published without these files and SIGWX is unaffected.
+      # Independent: if it fails the site is published without these files and the convection maps are unaffected.
       - name: Point values and grid fields (latest_points.json, fog_fields_*)
         continue-on-error: true
         shell: bash -l {0}

@@ -1,6 +1,6 @@
 """
 make_sigwx.py
-FIR SIGWX CB product from the hourly MultiConvect masks.
+6-hour CB convection polygon maps from the hourly MultiConvect masks.
 6-hour maps from the run's block until 24 UTC of the next day.
 MED = ICON alone or GFS+IFS (light green), HIGH = ICON + GFS/IFS (dark green), OCNL yellow, FRQ orange.
 Label: "HH-HH / HIGH|MED / FLxxx". A moving or spreading zone is split into
@@ -767,7 +767,7 @@ def plot_block(frames, b0, b1, cfg, out_path, run_label):
             ax.annotate("", xy=(e.x, e.y), xytext=(tx, ty), zorder=6,
                         arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
 
-    ax.set_title(f"FIR SIGWX  CB  (experimental)   VALID {hh(b0)}-{hh(b1, True)} UTC "
+    ax.set_title(f"CB convection polygons, 6 h  (experimental)   VALID {hh(b0)}-{hh(b1, True)} UTC "
                  f"{b0:%d.%m.%Y}   |   RUN {run_label}", fontsize=11)
     ax.legend(handles=[
         mpatches.Patch(facecolor=COLORS[c][0], edgecolor=COLORS[c][1], label=t) for c, t in (
@@ -793,7 +793,7 @@ def write_page(out_dir, items, run_label, xlsx_link=""):
     cards = "".join(f'<h2>{day}</h2><div class="grid">{"".join(c)}</div>' for day, c in days.items())
     html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FIR SIGWX CB</title>
+<title>CB convection polygons, 6 h</title>
 <style>
 body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1419;color:#e0e0e0;margin:0;padding:16px}}
 h1{{font-size:20px;margin:0 0 4px}} h2{{font-size:16px;margin:24px 0 10px;color:#8ab4d8}} .meta{{color:#7a8899;font-size:13px;margin-bottom:16px}}
@@ -805,7 +805,7 @@ table.sect{{border-collapse:collapse;margin-top:8px;font-size:12px;width:100%}}
 table.sect th,table.sect td{{border:1px solid #33415a;padding:3px 6px;text-align:center}}
 table.sect th{{color:#8ab4d8;font-weight:600}} .sect.none{{margin-top:6px;color:#667}}
 </style></head><body>
-<h1>FIR SIGWX CB &mdash; experimental</h1>
+<h1>CB convection polygons, 6-hour maps &mdash; experimental</h1>
 <div class="meta">Run {run_label} &middot; 6 h blocks to 24 UTC next day &middot; light green = ICON alone or GFS+IFS, dark green = ICON + GFS/IFS, yellow = OCNL, orange = FRQ &middot; <a href="../">hourly maps</a>{xlsx_link}</div>
 {cards}</body></html>"""
     (out_dir / "index.html").write_text(html, encoding="utf-8")

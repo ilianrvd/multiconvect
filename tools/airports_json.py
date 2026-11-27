@@ -1,7 +1,7 @@
 """
 airports.json — MultiConvect convective signal around the airports, hourly 0-48 h.
 For airport-nowcast. Per airport and hour:
-  cat_25      none / MED / HIGH  — highest SIGWX level within 25 km
+  cat_25      none / MED / HIGH  — highest convection-polygon level within 25 km
   lpi_max_25  max ICON LPI_CON_MAX within 25 km (J/kg, 0 = no signal)
   fl_max_25   max ICON HTOP_CON within 25 km where ICON/HIGH has a signal (FL, 0 = none)
   dens_50     none / ISOL / OCNL / FRQ — share of active cells within 50 km (HIGH present -> ISOL)

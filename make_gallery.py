@@ -57,7 +57,7 @@ def make_gallery(maps_dir="docs/maps", out_html="docs/index.html"):
 </head>
 <body>
   <h1>MultiConvect — Convective Forecast Bulgaria</h1>
-  <div class="meta">ICON-EU (lead) + GFS + ECMWF-IFS &middot; Hourly to 48h &middot; Updated: {now} &middot; <a href="sigwx/" style="color:#8ab4d8">FIR SIGWX (6 h)</a></div>
+  <div class="meta">ICON-EU (lead) + GFS + ECMWF-IFS &middot; Hourly to 48h &middot; Updated: {now} &middot; <a href="sigwx/" style="color:#8ab4d8">CB convection polygons (6 h)</a></div>
   <div class="legend">
     <span><span class="dot" style="background:#FF8C00"></span>HIGH (3 models)</span>
     <span><span class="dot" style="background:#4A7C2E"></span>MED (2 models)</span>
